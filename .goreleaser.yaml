@@ -19,5 +19,10 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# semantic-release creates the GitHub Release and its notes; GoReleaser only
+# attaches the binaries to it.
+release:
+  mode: keep-existing
+
 changelog:
-  use: github
+  disable: true

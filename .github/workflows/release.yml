@@ -1,14 +1,28 @@
 name: release
 
+# Every push to main: full CI, then semantic-release decides from the
+# Conventional Commits whether to cut a version. A release updates
+# CHANGELOG.md, tags vX.Y.Z, publishes the GitHub Release with generated
+# notes, and GoReleaser attaches the binaries for every OS/CPU.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: write # tag, CHANGELOG commit, GitHub Release + assets
+  issues: write # semantic-release "released in" comments
+  pull-requests: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -17,9 +31,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --clean
+          install-only: true
+      - name: semantic-release
+        run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

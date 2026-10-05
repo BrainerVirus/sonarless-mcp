@@ -1,0 +1,17 @@
+#!/bin/sh
+# Rejects commit messages that aren't Conventional Commits (CI runs the full
+# commitlint check). Enable once per clone: git config core.hooksPath .githooks
+subject=$(head -n 1 "$1")
+case "$subject" in
+  Merge\ * | Revert\ * | fixup!* | squash!*) exit 0 ;;
+esac
+if printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: [^ ].*'; then
+  exit 0
+fi
+cat >&2 <<EOF
+commit-msg: "$subject"
+is not a Conventional Commit. Use: <type>(<optional scope>): <summary>
+types: feat fix perf refactor docs test build ci chore style revert
+(feat -> minor release, fix/perf -> patch, "!" or BREAKING CHANGE -> major)
+EOF
+exit 1

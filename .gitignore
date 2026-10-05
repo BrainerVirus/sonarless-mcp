@@ -3,3 +3,4 @@
 /dist/
 sonar-metrics.json
 .scannerwork/
+node_modules/
