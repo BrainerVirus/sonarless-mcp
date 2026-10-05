@@ -139,6 +139,7 @@ sonarless-mcp remote update work --url http://10.0.0.5:9000   # server moved; ke
 sonarless-mcp remote update work --branch main                # CI now analyzes main; keeps url/token
 sonarless-mcp remote list        # name, reachable/unreachable, url, default branch
 sonarless-mcp remote import work --branch develop   # reuse a SonarQube MCP entry another client already has
+sonarless-mcp remote sync work   # make local scans judge this project like CI (gate, rule sets, new code)
 sonarless-mcp remote remove work
 ```
 
@@ -148,6 +149,16 @@ Use a **User token** (`squ_…`, *My Account → Security*): analysis tokens
 Every MCP tool then takes an optional `server` argument: `local` (default — your
 working copy, scanned in real time) or a remote's name (what CI found, e.g. on
 `develop`). The workspace's project key and the remote's branch are filled in.
+
+### Judge local scans like CI
+
+`sonarless-mcp remote sync work` (run in a project) copies the remote's quality
+gate, the quality profiles (rule sets) the project uses there and its new-code
+definition to your local server, and applies them to the project — so a local
+`scan` fails on the same conditions CI would (e.g. 80% coverage, 3% duplication)
+before you push. Copies are named `work: <name>`; nothing built-in is changed,
+and built-in profiles that are identical on both servers (same SonarQube
+version) are left as is. Run it again to pick up changes on the remote.
 
 Remotes are built to stay out of the way:
 

@@ -278,7 +278,72 @@ as is.`,
 	}
 	imp.Flags().StringVar(&importBranch, "branch", "", "default branch for tools that take one (e.g. develop)")
 
-	cmd.AddCommand(add, update, list, remove, imp)
+	sync := &cobra.Command{
+		Use:   "sync <name> [dir]",
+		Short: "Make local scans judge the project like the remote (quality gate, rule sets, new code)",
+		Long: `Copy the remote server's quality gate, the quality profiles (rule sets) the
+project uses there and its new-code definition to the local server, and apply
+them to the project. Local scans then pass or fail on the same conditions as CI.
+
+Copies are named "<remote>: <name>" so nothing local or built-in is changed;
+built-in profiles identical on both servers (same SonarQube version) are kept
+as they are. Run it again any time to pick up changes on the remote.`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := ""
+			if len(args) == 2 {
+				dir = args[1]
+			}
+			e, err := load(dir, true)
+			if err != nil {
+				return err
+			}
+			r, exists, err := remote.Get(e.cfg, args[0])
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return fmt.Errorf("no remote named %q", args[0])
+			}
+			token, err := remote.Token(e.cfg, r.Name)
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if err := e.server.Ensure(ctx); err != nil {
+				return err
+			}
+			p := e.project
+			fmt.Printf("Syncing %s (%s) from %s to the local server...\n", p.Key, p.KeySource, r.URL)
+			rep, err := sonar.SyncProject(ctx, sonar.NewToken(r.URL, token), e.server.Admin(), p.Key, p.Name, r.Name)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("  quality gate:  %s\n", rep.Gate)
+			for _, s := range rep.GateSkipped {
+				fmt.Printf("    skipped condition: %s\n", s)
+			}
+			if len(rep.Profiles) > 0 {
+				fmt.Printf("  rule sets:     %s\n", strings.Join(rep.Profiles, ", "))
+			}
+			if len(rep.ProfilesSame) > 0 {
+				fmt.Printf("  rule sets already identical (built-in, SonarQube %s): %d languages\n", rep.LocalVersion, len(rep.ProfilesSame))
+			}
+			for _, f := range rep.RuleFailures {
+				fmt.Printf("    %s\n", f)
+			}
+			if rep.NewCode != "" {
+				fmt.Printf("  new code:      %s\n", rep.NewCode)
+			}
+			if rep.RemoteVersion != rep.LocalVersion {
+				fmt.Printf("  note: remote runs SonarQube %s, local %s; set SONARLESS_SONARQUBE_VERSION to match for identical analyzers\n", rep.RemoteVersion, rep.LocalVersion)
+			}
+			fmt.Println("Run `sonarless-mcp scan` to see the project through the remote's rules.")
+			return nil
+		},
+	}
+
+	cmd.AddCommand(add, update, list, remove, imp, sync)
 	return cmd
 }
 
