@@ -371,6 +371,11 @@ func validToken(t string) (string, error) {
 			return "", errors.New("token contains spaces or control characters; nothing was saved")
 		}
 	}
+	switch {
+	case strings.HasPrefix(t, "sqa_"), strings.HasPrefix(t, "sqp_"):
+		return "", errors.New("that's an analysis token (sqa_/sqp_): it can only submit scans, not read results; " +
+			"create a User token (squ_) under My Account > Security instead; nothing was saved")
+	}
 	if len(t) < 16 {
 		return "", fmt.Errorf("token is too short (%d characters) to be a SonarQube token; nothing was saved", len(t))
 	}

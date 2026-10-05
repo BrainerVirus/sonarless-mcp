@@ -142,6 +142,9 @@ sonarless-mcp remote import work --branch develop   # reuse a SonarQube MCP entr
 sonarless-mcp remote remove work
 ```
 
+Use a **User token** (`squ_…`, *My Account → Security*): analysis tokens
+(`sqa_`/`sqp_`) can only submit scans, not read results, so they're refused.
+
 Every MCP tool then takes an optional `server` argument: `local` (default — your
 working copy, scanned in real time) or a remote's name (what CI found, e.g. on
 `develop`). The workspace's project key and the remote's branch are filled in.

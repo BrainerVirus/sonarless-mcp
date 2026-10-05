@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestValidToken(t *testing.T) {
-	for _, bad := range []string{"", "   ", "work", "abc def ghi jkl mno", "squ_abcdef\x03ghijklmnop", "short-token"} {
+	for _, bad := range []string{"", "   ", "work", "abc def ghi jkl mno", "squ_abcdef\x03ghijklmnop", "short-token", "sqa_0123456789abcdef0123456789abcdef01234567", "sqp_0123456789abcdef0123456789abcdef01234567"} {
 		if _, err := validToken(bad); err == nil {
 			t.Errorf("accepted %q", bad)
 		}
