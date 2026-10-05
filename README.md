@@ -71,8 +71,10 @@ If `~/.local/bin` isn't on your PATH yet, the installer adds it for every shell
 it finds — `~/.profile`, `~/.bashrc` (and `~/.bash_profile` on macOS), zsh's
 `.zshenv`, fish's `conf.d` — with one guarded, marked line each, so reruns
 change nothing (`SONARLESS_MCP_NO_MODIFY_PATH=1` opts out). On Windows it goes
-on your user PATH. A terminal that was already open may need `rehash` (zsh) or
-`hash -r` (bash), or a new tab; the installer prints the exact command.
+on your user PATH. In a terminal that was already open, the new command may not be recognized
+(or highlighted) yet: in zsh run `rehash`, in bash `hash -r`; fish notices on
+its own; Warp reads PATH only when a tab starts, so open a new tab there. The
+installer detects your shell and terminal and prints the one that applies.
 
 Installed clients are preselected; untick any you don't want, or clear them
 all. Run it again any time with `sonarless-mcp setup` (`--remove` to

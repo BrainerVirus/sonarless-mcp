@@ -105,18 +105,25 @@ if [ "$on_path" = 0 ] && [ "${SONARLESS_MCP_NO_MODIFY_PATH:-}" != 1 ]; then
     for f in $added; do say "  $f"; done
   fi
 fi
+# What makes the new command show up (and highlight as valid) in an already
+# open terminal depends on who checks commands: the shell (zsh-syntax-
+# highlighting & co. in Ghostty, Kitty, iTerm2, WezTerm, ...) re-reads PATH
+# after a rehash, but Warp's own input editor reads PATH only when a tab starts.
 case "$(basename "${SHELL:-sh}")" in
-  zsh) refresh="rehash" ;;
-  bash) refresh="hash -r" ;;
-  fish) refresh="" ;;
+  zsh) refresh="run: rehash" ;;
+  bash) refresh="run: hash -r" ;;
   *) refresh="" ;;
+esac
+case "${TERM_PROGRAM:-}" in
+  WarpTerminal) refresh="open a new tab (Warp reads PATH only when a tab starts; the command already works here)" ;;
 esac
 if [ "$on_path" = 0 ]; then
   now="export PATH=\"$INSTALL_DIR:\$PATH\""
   [ "$(basename "${SHELL:-sh}")" = fish ] && now="fish_add_path $INSTALL_DIR"
   say "To use sonarless-mcp in this terminal now, run:  $now   (new terminals pick it up)"
-elif [ -n "$refresh" ]; then
-  say "If this terminal doesn't find sonarless-mcp yet, run:  $refresh   (terminals with their own command check, like Warp, need a new tab)"
+fi
+if [ -n "$refresh" ]; then
+  say "If this terminal doesn't recognize sonarless-mcp yet, $refresh"
 fi
 command -v docker >/dev/null 2>&1 || say "note: Docker not found; sonarless-mcp needs Docker (Docker Desktop on macOS) to run SonarQube."
 

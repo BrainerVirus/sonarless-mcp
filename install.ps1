@@ -65,6 +65,9 @@ try {
         $env:Path += ";$installDir"
         Write-Host "Added $installDir to your user PATH (new terminals pick it up)."
     }
+    if ($env:TERM_PROGRAM -eq 'WarpTerminal') {
+        Write-Host 'If Warp underlines sonarless-mcp as unknown, open a new tab (Warp reads PATH only when a tab starts; the command already works here).'
+    }
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         Write-Host 'note: Docker not found; sonarless-mcp needs Docker Desktop to run SonarQube.'
     }
