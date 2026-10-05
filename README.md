@@ -31,11 +31,18 @@ One installer for Linux, macOS and Windows — tell your AI agent:
 Install sonarless-mcp: https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install
 ```
 
-or run it yourself (same script; your shell picks its half):
+or run it yourself — same script, copy the line for your shell:
+
+**Linux / macOS**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | sh     # Linux, macOS
-irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | iex           # Windows PowerShell
+curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | sh
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | iex
 ```
 
 `install` is a single file that is valid in both `sh` and PowerShell; it hands
