@@ -84,16 +84,26 @@ func EnsureWatcher(cfg *config.Config) error {
 	}
 	_ = lock.Unlock() // the child takes it; a race just means it exits early
 
+	return Spawn(cfg, "watcher.log", "daemon")
+}
+
+// Spawn starts this executable with args as a detached background process
+// (own session, no console, stdio to a log in the cache dir), so it outlives
+// the MCP client that triggered it and never holds the client's pipes.
+func Spawn(cfg *config.Config, logName string, args ...string) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	logf, err := os.OpenFile(filepath.Join(cfg.CacheDir, "watcher.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err := os.MkdirAll(cfg.CacheDir, 0o755); err != nil {
+		return err
+	}
+	logf, err := os.OpenFile(filepath.Join(cfg.CacheDir, logName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return err
 	}
 	defer logf.Close()
-	cmd := exec.Command(exe, "daemon")
+	cmd := exec.Command(exe, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, logf, logf
 	detach(cmd)
 	if err := cmd.Start(); err != nil {

@@ -55,11 +55,12 @@ func Available(ctx context.Context) error {
 
 // Container is the subset of `docker inspect` sonarless needs.
 type Container struct {
-	Name   string
-	Image  string // image reference the container was created from
-	Status string // created, running, exited, ...
-	Labels map[string]string
-	Mounts []Mount
+	Name    string
+	Image   string // image reference the container was created from
+	ImageID string // image ID the container runs
+	Status  string // created, running, exited, ...
+	Labels  map[string]string
+	Mounts  []Mount
 }
 
 // Mount is a container mount.
@@ -80,6 +81,7 @@ func Inspect(ctx context.Context, name string) (*Container, error) {
 	}
 	var raw []struct {
 		Name   string
+		Image  string
 		Config struct {
 			Image  string
 			Labels map[string]string
@@ -92,12 +94,19 @@ func Inspect(ctx context.Context, name string) (*Container, error) {
 	}
 	r := raw[0]
 	return &Container{
-		Name:   strings.TrimPrefix(r.Name, "/"),
-		Image:  r.Config.Image,
-		Status: r.State.Status,
-		Labels: r.Config.Labels,
-		Mounts: r.Mounts,
+		Name:    strings.TrimPrefix(r.Name, "/"),
+		Image:   r.Config.Image,
+		ImageID: r.Image,
+		Status:  r.State.Status,
+		Labels:  r.Config.Labels,
+		Mounts:  r.Mounts,
 	}, nil
+}
+
+// ImageID returns the local ID of an image reference ("" if not pulled).
+func ImageID(ctx context.Context, ref string) string {
+	id, _ := Run(ctx, "image", "inspect", "--format", "{{.Id}}", ref)
+	return id
 }
 
 // EnsureNetwork creates the network if missing.

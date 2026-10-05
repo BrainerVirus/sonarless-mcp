@@ -65,6 +65,15 @@ func (m *Container) Ensure(ctx context.Context) error {
 		if err := m.create(ctx); err != nil {
 			return err
 		}
+	case !c.Running() && c.ImageID != docker.ImageID(ctx, m.Cfg.Get(config.MCPImage)):
+		// A newer image was pulled (auto-update); pick it up while nothing uses
+		// the container. A running container is never swapped mid-session.
+		if err := docker.Remove(ctx, m.name()); err != nil {
+			return err
+		}
+		if err := m.create(ctx); err != nil {
+			return err
+		}
 	case !c.Running():
 		if err := docker.Start(ctx, m.name()); err != nil {
 			return err

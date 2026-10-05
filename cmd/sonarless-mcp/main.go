@@ -95,6 +95,7 @@ func main() {
 			if err != nil {
 				return err
 			}
+			autoUpdate(e.cfg)
 			if err := e.server.Ensure(ctx); err != nil {
 				return err
 			}
@@ -187,6 +188,7 @@ func main() {
 			if err != nil {
 				return err
 			}
+			autoUpdate(e.cfg)
 			if scanOpt.Scanner == "" {
 				scanOpt.Scanner = e.cfg.Get(config.Scanner)
 			}
@@ -290,6 +292,7 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 				return err
 			}
 			e.server.Log, e.mcp.Log = os.Stderr, os.Stderr // stdout is the protocol
+			autoUpdate(e.cfg)
 			shim := &mcp.Shim{Cfg: e.cfg, Server: e.server, MCP: e.mcp, Project: e.project, Log: os.Stderr}
 			return shim.Run(ctx, os.Stdin, os.Stdout)
 		},
@@ -319,6 +322,7 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 	})
 
 	root.AddCommand(setupCommand())
+	root.AddCommand(updateCommand())
 
 	root.AddCommand(&cobra.Command{
 		Use:    "daemon",
