@@ -27,16 +27,28 @@ type Container struct {
 	Name     string // container name
 	Port     int    // host port (bound to 127.0.0.1)
 	SonarURL string // SonarQube URL as seen from inside the container
+	// Image to run: a tag for the local container; for remotes the exact image
+	// ID the local one runs, so every server exposes the same tool schemas.
+	Image string
 }
 
 // NewLocal is the MCP container for the local SonarQube.
 func NewLocal(cfg *config.Config, log io.Writer) *Container {
-	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer(), Port: cfg.Int(config.MCPPort), SonarURL: cfg.ServerURLInNetwork()}
+	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer(), Port: cfg.Int(config.MCPPort), SonarURL: cfg.ServerURLInNetwork(), Image: cfg.Get(config.MCPImage)}
 }
 
 // NewRemote is the MCP container for a remote SonarQube.
 func NewRemote(cfg *config.Config, log io.Writer, name, url string, port int) *Container {
-	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer() + "-" + name, Port: port, SonarURL: url}
+	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer() + "-" + name, Port: port, SonarURL: url, Image: cfg.Get(config.MCPImage)}
+}
+
+// RunningImageID is the image ID the container runs ("" if absent).
+func (m *Container) RunningImageID(ctx context.Context) string {
+	c, err := docker.Inspect(ctx, m.name())
+	if err != nil {
+		return ""
+	}
+	return c.ImageID
 }
 
 func (m *Container) name() string { return m.Name }
@@ -46,7 +58,7 @@ func (m *Container) URL() string { return fmt.Sprintf("http://127.0.0.1:%d/mcp",
 
 func (m *Container) spec() string {
 	h := sha256.Sum256([]byte(strings.Join([]string{
-		m.Cfg.Get(config.MCPImage),
+		m.Image,
 		fmt.Sprint(m.Port),
 		m.Cfg.Network(),
 		m.SonarURL,
@@ -82,7 +94,7 @@ func (m *Container) Ensure(ctx context.Context) error {
 		if err := m.create(ctx); err != nil {
 			return err
 		}
-	case !c.Running() && c.ImageID != docker.ImageID(ctx, m.Cfg.Get(config.MCPImage)):
+	case !c.Running() && c.ImageID != docker.ImageID(ctx, m.Image):
 		// A newer image was pulled (auto-update); pick it up while nothing uses
 		// the container. A running container is never swapped mid-session.
 		if err := docker.Remove(ctx, m.name()); err != nil {
@@ -101,7 +113,7 @@ func (m *Container) Ensure(ctx context.Context) error {
 
 func (m *Container) create(ctx context.Context) error {
 	if m.Log != nil {
-		fmt.Fprintf(m.Log, "Creating shared MCP container %s (%s)...\n", m.name(), m.Cfg.Get(config.MCPImage))
+		fmt.Fprintf(m.Log, "Creating shared MCP container %s (%s)...\n", m.name(), m.Image)
 	}
 	args := []string{"run", "-d", "--init", "--name", m.name(),
 		"--network", m.Cfg.Network(),
@@ -119,7 +131,7 @@ func (m *Container) create(ctx context.Context) error {
 	if m.Cfg.Bool(config.MCPReadOnly) {
 		args = append(args, "-e", "SONARQUBE_READ_ONLY=true")
 	}
-	args = append(args, m.Cfg.Get(config.MCPImage))
+	args = append(args, m.Image)
 	_, err := docker.Run(ctx, args...)
 	return err
 }

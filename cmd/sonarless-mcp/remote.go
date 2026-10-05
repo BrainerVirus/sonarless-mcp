@@ -64,7 +64,12 @@ func shimBackends(e *env) ([]*mcp.Backend, error) {
 		backends = append(backends, &mcp.Backend{
 			Name: r.Name, About: about, APIURL: r.URL, MCPURL: c.URL(), Branch: r.Branch, Remote: true,
 			Ensure: func(ctx context.Context) error {
-				if c.Alive(ctx) {
+				// Run exactly the MCP server version the local container runs:
+				// agents see one tool list, so every server must share its schemas.
+				if id := e.mcp.RunningImageID(ctx); id != "" {
+					c.Image = id
+				}
+				if c.Alive(ctx) && (c.Image == e.cfg.Get(config.MCPImage) || c.RunningImageID(ctx) == c.Image) {
 					return nil
 				}
 				if err := docker.Available(ctx); err != nil {
