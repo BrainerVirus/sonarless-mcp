@@ -249,3 +249,56 @@ func TestSkillInstallRespectsUserSkill(t *testing.T) {
 		t.Error("vscode has no skills dir")
 	}
 }
+
+func TestWriteThroughSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	dir := t.TempDir()
+	real := filepath.Join(dir, "dotfiles", "opencode.json")
+	_ = os.MkdirAll(filepath.Dir(real), 0o755)
+	_ = os.WriteFile(real, []byte(`{"mcp":{}}`), 0o644)
+	link := filepath.Join(dir, "opencode.json")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := jsonSet(link, "mcp", ServerName, map[string]any{"type": "local"}); err != nil {
+		t.Fatal(err)
+	}
+	if fi, _ := os.Lstat(link); fi.Mode()&os.ModeSymlink == 0 {
+		t.Error("symlink replaced by a file")
+	}
+	if !jsonHas(real, "mcp", ServerName) {
+		t.Error("managed file not updated")
+	}
+}
+
+func TestCodexInlineAndCommentedEntries(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", "")
+	env := Env{Home: home, GOOS: "linux"}
+	f := filepath.Join(home, ".codex", "config.toml")
+	_ = os.MkdirAll(filepath.Dir(f), 0o755)
+	c := clientByID("codex")
+
+	_ = os.WriteFile(f, []byte("[mcp_servers]\nsonarqube = { command = \"docker\", args = [\"run\"] }\n"), 0o644)
+	if name, _ := c.Register(env, "/opt/bin/sonarless-mcp"); name != AltServerName {
+		t.Errorf("inline foreign entry not detected; registered as %q", name)
+	}
+	b, _ := os.ReadFile(f)
+	if strings.Count(string(b), "[mcp_servers.sonarqube]") != 0 {
+		t.Errorf("duplicate sonarqube table:\n%s", b)
+	}
+
+	_ = os.WriteFile(f, []byte("[mcp_servers.sonarqube] # ours\ncommand = \"/opt/bin/sonarless-mcp\"\nargs = [\"mcp\"]\n"), 0o644)
+	if !c.Configured(env) {
+		t.Error("header with a trailing comment not recognized")
+	}
+	if name, _ := c.Register(env, "/opt/bin/sonarless-mcp"); name != ServerName {
+		t.Errorf("re-register moved to %q", name)
+	}
+	b, _ = os.ReadFile(f)
+	if strings.Count(string(b), "mcp_servers.sonarqube") != 1 {
+		t.Errorf("duplicated:\n%s", b)
+	}
+}

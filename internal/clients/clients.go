@@ -313,7 +313,11 @@ func codex() Client {
 			if err != nil {
 				return "", false
 			}
-			return tomlBody(string(b), header(name))
+			if body, ok := tomlBody(string(b), header(name)); ok {
+				return body, true
+			}
+			// `[mcp_servers]` + `name = { ... }` is the same entry, inline.
+			return tomlInline(string(b), "[mcp_servers]", name)
 		}
 	}
 	return Client{
@@ -496,14 +500,45 @@ func encodeCompact(obj []kv) json.RawMessage {
 
 // --- TOML block editing ---
 
-// tomlBlock returns the line index of header in s, or -1.
+// tomlBlock returns the line index of header in s, or -1. A trailing
+// comment after the header is allowed.
 func tomlBlock(s, header string) int {
 	for i, l := range strings.Split(s, "\n") {
-		if strings.TrimSpace(l) == header {
+		if tomlHeader(l) == header {
 			return i
 		}
 	}
 	return -1
+}
+
+// tomlHeader returns a line's table header without spaces/comment, or "".
+func tomlHeader(line string) string {
+	t := strings.TrimSpace(line)
+	if !strings.HasPrefix(t, "[") {
+		return ""
+	}
+	if i := strings.Index(t, "#"); i >= 0 {
+		t = strings.TrimSpace(t[:i])
+	}
+	return t
+}
+
+// tomlInline returns `name = { ... }` defined inside [parent], if any.
+func tomlInline(s, parent, name string) (string, bool) {
+	in := false
+	for _, l := range strings.Split(s, "\n") {
+		if h := tomlHeader(l); h != "" {
+			in = h == parent
+			continue
+		}
+		if !in {
+			continue
+		}
+		if k, _, ok := strings.Cut(strings.TrimSpace(l), "="); ok && strings.Trim(strings.TrimSpace(k), `"'`) == name {
+			return l, true
+		}
+	}
+	return "", false
 }
 
 // tomlBody returns the text of the table starting at header, if present.
@@ -515,7 +550,7 @@ func tomlBody(s, header string) (string, bool) {
 	}
 	end := len(lines)
 	for i := start + 1; i < len(lines); i++ {
-		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+		if tomlHeader(lines[i]) != "" {
 			end = i
 			break
 		}
@@ -544,7 +579,7 @@ func tomlReplace(file, header, block string) error {
 	}
 	end := len(lines)
 	for i := start + 1; i < len(lines); i++ {
-		if t := strings.TrimSpace(lines[i]); strings.HasPrefix(t, "[") {
+		if tomlHeader(lines[i]) != "" {
 			end = i
 			break
 		}
@@ -563,6 +598,11 @@ func tomlReplace(file, header, block string) error {
 }
 
 func writeFile(file string, b []byte) error {
+	// Write through symlinks (dotfiles managers link configs into place):
+	// replacing the link with a file would detach it from the managed copy.
+	if real, err := filepath.EvalSymlinks(file); err == nil {
+		file = real
+	}
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		return err
 	}
