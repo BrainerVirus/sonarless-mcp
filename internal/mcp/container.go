@@ -133,6 +133,10 @@ func (m *Container) create(ctx context.Context) error {
 	}
 	args = append(args, m.Image)
 	_, err := docker.Run(ctx, args...)
+	if err != nil && (strings.Contains(err.Error(), "address already in use") || strings.Contains(err.Error(), "port is already allocated")) {
+		_ = docker.Remove(ctx, m.name()) // don't leave a container that can never start
+		return fmt.Errorf("port %d is already in use by another program; stop it or set %s (local) or the remote's port to a free one", m.Port, config.MCPPort)
+	}
 	return err
 }
 

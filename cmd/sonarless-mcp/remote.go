@@ -52,7 +52,9 @@ func shimBackends(e *env) ([]*mcp.Backend, error) {
 	backends := []*mcp.Backend{local}
 	rs, err := remote.Load(e.cfg)
 	if err != nil {
-		return nil, err
+		// A broken remotes file must not take the local server down with it.
+		fmt.Fprintf(os.Stderr, "sonarless-mcp: ignoring remotes: %v\n", err)
+		return backends, nil
 	}
 	for _, r := range rs {
 		r := r
@@ -82,8 +84,14 @@ func shimBackends(e *env) ([]*mcp.Backend, error) {
 			},
 			Token: func(ctx context.Context, force bool) (string, error) {
 				t, err := remote.Token(e.cfg, r.Name)
-				if err == nil && force && !sonar.NewToken(r.URL, t).Valid(ctx) {
-					return "", fmt.Errorf("token rejected by %s; update it with `sonarless-mcp remote update %s --token`", r.URL, r.Name)
+				if err == nil && force {
+					ok, cerr := sonar.NewToken(r.URL, t).CheckAuth(ctx)
+					switch {
+					case cerr != nil:
+						return "", fmt.Errorf("couldn't verify the token with %s (network/VPN?): %v", r.URL, cerr)
+					case !ok:
+						return "", fmt.Errorf("token rejected by %s; update it with `sonarless-mcp remote update %s --token`", r.URL, r.Name)
+					}
 				}
 				return t, err
 			},
@@ -315,9 +323,9 @@ as they are. Run it again any time to pick up changes on the remote.`,
 			}
 			p := e.project
 			fmt.Printf("Syncing %s (%s) from %s to the local server...\n", p.Key, p.KeySource, r.URL)
-			rep, err := sonar.SyncProject(ctx, sonar.NewToken(r.URL, token), e.server.Admin(), p.Key, p.Name, r.Name)
-			if err != nil {
-				return err
+			rep, syncErr := sonar.SyncProject(ctx, sonar.NewToken(r.URL, token), e.server.Admin(), p.Key, p.Name, r.Name)
+			if rep == nil {
+				return syncErr
 			}
 			fmt.Printf("  quality gate:  %s\n", rep.Gate)
 			for _, s := range rep.GateSkipped {
@@ -337,6 +345,12 @@ as they are. Run it again any time to pick up changes on the remote.`,
 			}
 			if rep.RemoteVersion != rep.LocalVersion {
 				fmt.Printf("  note: remote runs SonarQube %s, local %s; set SONARLESS_SONARQUBE_VERSION to match for identical analyzers\n", rep.RemoteVersion, rep.LocalVersion)
+			}
+			for _, sk := range rep.ProfilesSkip {
+				fmt.Printf("    rule set not copied: %s\n", sk)
+			}
+			if syncErr != nil {
+				return fmt.Errorf("partly applied (above): %w", syncErr)
 			}
 			fmt.Println("Run `sonarless-mcp scan` to see the project through the remote's rules.")
 			return nil

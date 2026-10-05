@@ -1,10 +1,12 @@
 package mcp
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -279,5 +281,114 @@ func TestLocalTools(t *testing.T) {
 		Params: json.RawMessage(`{"name":"sonarless_status","arguments":{}}`)})
 	if !called || !strings.Contains(out.String(), "all good") || !strings.Contains(out.String(), `"id":5`) {
 		t.Errorf("called=%v out=%s", called, out.String())
+	}
+}
+
+// runShim drives a shim over pipes; returns a send func and a channel of
+// every message the shim writes.
+func runShim(t *testing.T, s *Shim) (func(string), <-chan map[string]any) {
+	t.Helper()
+	inR, inW := io.Pipe()
+	outR, outW := io.Pipe()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); inW.Close() })
+	go func() { _ = s.Run(ctx, inR, outW); outW.Close() }()
+	msgs := make(chan map[string]any, 32)
+	go func() {
+		sc := bufio.NewScanner(outR)
+		sc.Buffer(make([]byte, 1<<20), 1<<20)
+		for sc.Scan() {
+			var m map[string]any
+			if json.Unmarshal(sc.Bytes(), &m) != nil {
+				t.Errorf("non-JSON on stdout: %q", sc.Text())
+			}
+			msgs <- m
+		}
+		close(msgs)
+	}()
+	return func(line string) { _, _ = io.WriteString(inW, line+"\n") }, msgs
+}
+
+func next(t *testing.T, msgs <-chan map[string]any, within time.Duration) map[string]any {
+	t.Helper()
+	select {
+	case m := <-msgs:
+		return m
+	case <-time.After(within):
+		t.Fatal("no message from shim")
+		return nil
+	}
+}
+
+func TestNoReplyGetsAnswered(t *testing.T) {
+	s := newTestShim(t)
+	html := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, "<html>proxy says hi</html>")
+	}))
+	defer html.Close()
+	b := s.local()
+	b.MCPURL, b.APIURL = html.URL, html.URL
+	b.Ensure = func(context.Context) error { return nil }
+	b.Token = func(context.Context, bool) (string, error) { return "t", nil }
+	send, msgs := runShim(t, s)
+	send(`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"show_rule","arguments":{"key":"x"}}}`)
+	m := next(t, msgs, 5*time.Second)
+	res, _ := m["result"].(map[string]any)
+	if m["id"] != float64(7) || res["isError"] != true {
+		t.Errorf("got %v", m)
+	}
+}
+
+func TestSlowFirstStartIsDegradedThenListChanged(t *testing.T) {
+	s := newTestShim(t)
+	_ = os.Remove(s.cacheFile()) // first ever start: nothing cached
+	s.Local = []LocalTool{{Name: "sonarless_status", Run: func(context.Context, map[string]any) (string, bool) { return "ok", false }}}
+	release := make(chan struct{})
+	b := s.local()
+	b.Ensure = func(ctx context.Context) error { <-release; return nil } // SonarQube still starting
+	b.Token = func(context.Context, bool) (string, error) { return "t", nil }
+	b.APIURL = "http://127.0.0.1:1"
+	send, msgs := runShim(t, s)
+
+	start := time.Now()
+	send(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	m := next(t, msgs, 6*time.Second)
+	if time.Since(start) > 5*time.Second {
+		t.Errorf("tools/list waited %s", time.Since(start))
+	}
+	tools := m["result"].(map[string]any)["tools"].([]any)
+	if len(tools) != 1 {
+		t.Errorf("degraded tools = %v", tools)
+	}
+	close(release) // SonarQube is up now
+	if n := next(t, msgs, 5*time.Second); n["method"] != "notifications/tools/list_changed" {
+		t.Errorf("expected list_changed, got %v", n)
+	}
+}
+
+func TestProjectRecheckAfterScan(t *testing.T) {
+	s := newTestShim(t)
+	exists := false
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !exists {
+			http.Error(w, `{"errors":[{"msg":"not found"}]}`, http.StatusNotFound)
+			return
+		}
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer api.Close()
+	b := s.local()
+	b.inject.Store(false)
+	b.APIURL = api.URL
+	b.checkProject(context.Background(), s.Project, true)
+	if b.inject.Load() {
+		t.Fatal("injecting for a missing project")
+	}
+	exists = true // e.g. sonarless_scan just created it
+	b.checked.Store(time.Now().Add(-projectRecheck).UnixNano())
+	b.checkProject(context.Background(), s.Project, false)
+	if !b.inject.Load() {
+		t.Error("project found later is never defaulted")
 	}
 }

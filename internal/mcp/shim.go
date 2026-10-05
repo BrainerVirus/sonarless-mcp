@@ -8,12 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/BrainerVirus/sonarless-mcp/internal/config"
@@ -49,7 +51,7 @@ type Backend struct {
 	ready   atomic.Bool
 	token   atomic.Value // string
 	inject  atomic.Bool  // the workspace's project exists here: default projectKey to it
-	project string
+	checked atomic.Int64 // unix nanos of the last project check (re-checked while not found)
 }
 
 // probeTTL caches reachability so an offline remote (VPN down) costs one
@@ -95,14 +97,25 @@ func (b *Backend) boot(ctx context.Context, p *project.Project) error {
 			return err
 		}
 	}
-	if p != nil && b.project != p.Key {
-		err := sonar.NewToken(b.APIURL, b.currentToken()).Do(ctx, http.MethodGet, "/api/components/show",
-			map[string][]string{"component": {p.Key}}, nil)
-		b.inject.Store(err == nil)
-		b.project = p.Key
-	}
+	b.checkProject(ctx, p, true)
 	b.ready.Store(true)
 	return nil
+}
+
+// projectRecheck is how often a project not found on a server is looked up
+// again (it may have been scanned since, e.g. by sonarless_scan).
+const projectRecheck = 15 * time.Second
+
+// checkProject decides whether projectKey defaults to the workspace's project
+// on this server. Callers hold b.mu (or accept a benign duplicate check).
+func (b *Backend) checkProject(ctx context.Context, p *project.Project, force bool) {
+	if p == nil || b.inject.Load() || (!force && time.Since(time.Unix(0, b.checked.Load())) < projectRecheck) {
+		return
+	}
+	err := sonar.NewToken(b.APIURL, b.currentToken()).Do(ctx, http.MethodGet, "/api/components/show",
+		map[string][]string{"component": {p.Key}}, nil)
+	b.inject.Store(err == nil)
+	b.checked.Store(time.Now().UnixNano())
 }
 
 func (b *Backend) refresh(ctx context.Context, force bool) error {
@@ -125,13 +138,14 @@ type Shim struct {
 	Project  *project.Project
 	Log      io.Writer
 
-	http      *http.Client
-	out       io.Writer
-	outMu     sync.Mutex
-	booted    chan struct{} // closed after the default backend's first boot attempt
-	bootErr   error
-	touchMu   sync.Mutex
-	lastTouch time.Time
+	http         *http.Client
+	out          io.Writer
+	outMu        sync.Mutex
+	booted       chan struct{} // closed after the default backend's first boot attempt
+	bootErr      error         // read only after booted is closed
+	degradedSent atomic.Bool   // answered initialize/tools/list without SonarQube's tools
+	touchMu      sync.Mutex
+	lastTouch    time.Time
 }
 
 type message struct {
@@ -167,11 +181,10 @@ func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 	s.http = &http.Client{} // tool calls (e.g. analysis) can be slow; rely on ctx
 	s.booted = make(chan struct{})
 	go func() {
-		s.bootErr = s.local().boot(ctx, s.Project)
-		if err := idle.EnsureWatcher(s.Cfg); err != nil && s.Log != nil {
-			fmt.Fprintf(s.Log, "sonarless-mcp: idle watcher not started: %v\n", err)
-		}
+		err := s.local().boot(ctx, s.Project)
+		s.bootErr = err
 		close(s.booted)
+		s.afterBoot(err)
 	}()
 
 	r := bufio.NewReaderSize(in, 1<<20)
@@ -201,11 +214,22 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 	s.touch()
 	switch msg.Method {
 	case "initialize", "tools/list":
-		if s.waitBooted(ctx, cacheWait) != nil || s.bootErr != nil {
+		booted := s.waitBooted(ctx, cacheWait) == nil
+		if !booted || s.bootErr != nil { // bootErr is only read once booted is closed
 			if cached := s.cached(msg.Method); cached != nil {
 				s.reply(msg, cached)
 				return
 			}
+			// Nothing cached and SonarQube is still starting or can't start
+			// (e.g. Docker down): come up anyway with the sonarless_* tools so
+			// the agent isn't stuck; tools/list_changed follows once it's up.
+			reason := "SonarQube is starting (the first start can take a minute); its tools appear when it is up."
+			if booted {
+				reason = "SonarQube is not available right now: " + s.bootErr.Error()
+			}
+			s.degradedSent.Store(true)
+			s.reply(msg, s.degraded(msg, reason))
+			return
 		}
 	}
 	if msg.Method == "tools/call" && msg.isRequest() {
@@ -249,7 +273,11 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 		}
 		return
 	}
+	answered := false
 	for _, r := range replies {
+		if string(r.ID) == string(msg.ID) {
+			answered = true
+		}
 		if r.Error == nil && string(r.ID) == string(msg.ID) {
 			switch msg.Method {
 			case "initialize":
@@ -262,6 +290,24 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 		}
 		s.send(r)
 	}
+	if !answered { // empty/garbled body or a 202 to a request: never leave the client waiting
+		const why = "the SonarQube MCP server returned no answer for this request"
+		if msg.Method == "tools/call" {
+			s.toolFailure(msg, why)
+		} else {
+			s.send(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32603, "sonarless-mcp: " + why}})
+		}
+	}
+}
+
+// notConnected reports whether err happened before the request reached the
+// server (refused/unreachable), so resending it can't duplicate an effect.
+func notConnected(err error) bool {
+	var op *net.OpError
+	if errors.As(err, &op) && op.Op == "dial" {
+		return true
+	}
+	return errors.Is(err, syscall.ECONNREFUSED)
 }
 
 // route picks the backend for a tools/call (its `server` argument, default
@@ -285,10 +331,13 @@ func (s *Shim) route(ctx context.Context, params json.RawMessage) (*Backend, jso
 		}
 	}
 	if !b.ready.Load() {
-		if err := b.boot(ctx, s.Project); err != nil {
+		err := b.boot(ctx, s.Project)
+		s.afterBoot(err)
+		if err != nil {
 			return nil, nil, toolError{err}
 		}
 	}
+	b.checkProject(ctx, s.Project, false)
 	return b, s.fillDefaults(b, params), nil
 }
 
@@ -350,9 +399,14 @@ func (s *Shim) forward(ctx context.Context, b *Backend, msg message) ([]message,
 				return nil, rerr
 			}
 			continue
-		case err != nil && attempt == 0 && ctx.Err() == nil:
+		case err != nil && attempt == 0 && ctx.Err() == nil && notConnected(err):
+			// Containers stopped (idle) or restarting: nothing was sent, so
+			// booting and sending again is safe. Errors after sending are not
+			// retried: the call (e.g. changing an issue) may have happened.
 			b.ready.Store(false)
-			if berr := b.boot(ctx, s.Project); berr != nil {
+			berr := b.boot(ctx, s.Project)
+			s.afterBoot(berr)
+			if berr != nil {
 				return nil, berr
 			}
 			continue
@@ -441,6 +495,42 @@ func readSSE(r io.Reader) ([]message, error) {
 	}
 	flush()
 	return out, sc.Err()
+}
+
+// afterBoot runs after a boot attempt of the local server: keep the idle
+// watcher alive (it exits after stopping the containers) and, if clients were
+// answered without SonarQube's tools, tell them the list changed.
+func (s *Shim) afterBoot(err error) {
+	if err != nil {
+		return
+	}
+	if werr := idle.EnsureWatcher(s.Cfg); werr != nil && s.Log != nil {
+		fmt.Fprintf(s.Log, "sonarless-mcp: idle watcher not started: %v\n", werr)
+	}
+	if s.degradedSent.Swap(false) {
+		s.send(message{JSONRPC: "2.0", Method: "notifications/tools/list_changed"})
+	}
+}
+
+// degraded answers initialize/tools/list without a SonarQube MCP server.
+func (s *Shim) degraded(req message, reason string) json.RawMessage {
+	if req.Method == "tools/list" {
+		return json.RawMessage(`{"tools":[]}`)
+	}
+	var p struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	_ = json.Unmarshal(req.Params, &p)
+	if p.ProtocolVersion == "" {
+		p.ProtocolVersion = "2025-06-18"
+	}
+	b, _ := json.Marshal(map[string]any{
+		"protocolVersion": p.ProtocolVersion,
+		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": true}},
+		"serverInfo":      map[string]any{"name": "sonarless-mcp"},
+		"instructions":    reason,
+	})
+	return b
 }
 
 func (s *Shim) reply(req message, result json.RawMessage) {

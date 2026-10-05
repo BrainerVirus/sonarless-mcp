@@ -48,6 +48,9 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test ./...
+      - name: race detector
+        if: runner.os == 'Linux'
+        run: go test -race ./...
       - run: go build ./cmd/sonarless-mcp
 
   # Builds a snapshot release and installs it with the real install scripts,
