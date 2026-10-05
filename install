@@ -1,0 +1,43 @@
+#!/bin/sh
+echo --% >/dev/null;: ' | Out-Null
+<#'
+# ---------------------------------------------------------------------------
+# sonarless-mcp installer: one entry point for every OS.
+#
+#   Linux / macOS:  curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | sh
+#   Windows:        irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | iex
+#
+# This file is valid POSIX sh AND PowerShell: each shell runs its own half and
+# hands off to the platform installer (install.sh / install.ps1), which
+# detects the CPU, downloads the release, verifies its checksum, installs it
+# and then registers sonarless-mcp in your AI clients (an interactive picker
+# in a terminal; for agents and scripts it lists the detected clients and the
+# command to register them).
+#
+# Options (environment): SONARLESS_MCP_VERSION=vX.Y.Z, SONARLESS_MCP_INSTALL_DIR,
+# SONARLESS_MCP_NO_SETUP=1. Arguments after `sh -s --` go to `sonarless-mcp setup`.
+# ---------------------------------------------------------------------------
+
+# --- POSIX sh (Linux, macOS, WSL, Git Bash) ---
+set -eu
+base="${SONARLESS_MCP_SCRIPTS_BASE:-https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main}"
+case "$(uname -s 2>/dev/null)" in
+  MINGW* | MSYS* | CYGWIN*)
+    if command -v powershell.exe >/dev/null 2>&1; then
+      exec powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm '$base/install.ps1' | iex"
+    fi ;;
+esac
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL "$base/install.sh" -o "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh"
+else
+  wget -qO "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh" "$base/install.sh"
+fi
+trap 'rm -f "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh"' EXIT
+sh "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh" "$@"
+exit $?
+#>
+
+# --- PowerShell (Windows) ---
+$base = if ($env:SONARLESS_MCP_SCRIPTS_BASE) { $env:SONARLESS_MCP_SCRIPTS_BASE } else { 'https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main' }
+$script = if ($base -like 'file://*') { Get-Content -Raw ([uri]"$base/install.ps1").LocalPath } else { Invoke-RestMethod "$base/install.ps1" }
+& ([scriptblock]::Create($script)) @args

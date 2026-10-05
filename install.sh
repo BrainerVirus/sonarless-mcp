@@ -88,5 +88,10 @@ elif [ -t 1 ] && (: </dev/tty) 2>/dev/null; then
   # stdin is the piped script under `curl | sh`; the picker reads the terminal.
   exec "$INSTALL_DIR/sonarless-mcp" setup </dev/tty
 else
-  say "Run \`sonarless-mcp setup\` to register it in your AI clients."
+  # No terminal (an AI agent or a script): show what was found and how to finish.
+  "$INSTALL_DIR/sonarless-mcp" setup --list
+  say ""
+  say "Next: register it in the clients you want, e.g."
+  say "  sonarless-mcp setup --clients claude,cursor    (or --yes for every detected client)"
+  say "then restart those clients."
 fi

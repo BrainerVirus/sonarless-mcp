@@ -66,24 +66,37 @@ jobs:
         with:
           version: "~> v2"
           args: release --snapshot --clean --skip=publish
-      - name: install.sh
+      # The single entry point (`install`) is valid sh and PowerShell; run it
+      # the way users do, against the snapshot built above.
+      - name: install (sh, piped like curl | sh)
         if: runner.os != 'Windows'
         env:
+          SONARLESS_MCP_SCRIPTS_BASE: file://${{ github.workspace }}
           SONARLESS_MCP_BASE_URL: file://${{ github.workspace }}/dist
           SONARLESS_MCP_INSTALL_DIR: ${{ runner.temp }}/bin
-          SONARLESS_MCP_NO_SETUP: "1"
         run: |
-          sh install.sh
+          sh < install
           "$SONARLESS_MCP_INSTALL_DIR/sonarless-mcp" --version
-          "$SONARLESS_MCP_INSTALL_DIR/sonarless-mcp" setup --remove --yes
-      - name: install.ps1
+          for shell in bash dash zsh; do
+            if command -v "$shell" >/dev/null; then "$shell" < install >/dev/null && echo "$shell ok"; fi
+          done
+      - name: install (PowerShell 7, like irm | iex)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
-          SONARLESS_MCP_INSTALL_DIR: ${{ runner.temp }}\bin
-          SONARLESS_MCP_NO_SETUP: "1"
+          SONARLESS_MCP_INSTALL_DIR: ${{ runner.temp }}\bin7
         run: |
-          $env:SONARLESS_MCP_BASE_URL = "file:///$($env:GITHUB_WORKSPACE -replace '\\','/')/dist"
-          ./install.ps1
+          $env:SONARLESS_MCP_SCRIPTS_BASE = "file:///$($env:GITHUB_WORKSPACE -replace '\\','/')"
+          $env:SONARLESS_MCP_BASE_URL = "$env:SONARLESS_MCP_SCRIPTS_BASE/dist"
+          Get-Content -Raw ./install | Invoke-Expression
           & "$env:SONARLESS_MCP_INSTALL_DIR\sonarless-mcp.exe" --version
-          & "$env:SONARLESS_MCP_INSTALL_DIR\sonarless-mcp.exe" setup --remove --yes
+      - name: install (Windows PowerShell 5.1, like irm | iex)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          SONARLESS_MCP_INSTALL_DIR: ${{ runner.temp }}\bin5
+        run: |
+          $env:SONARLESS_MCP_SCRIPTS_BASE = "file:///$($env:GITHUB_WORKSPACE -replace '\\','/')"
+          $env:SONARLESS_MCP_BASE_URL = "$env:SONARLESS_MCP_SCRIPTS_BASE/dist"
+          Get-Content -Raw ./install | Invoke-Expression
+          & "$env:SONARLESS_MCP_INSTALL_DIR\sonarless-mcp.exe" --version

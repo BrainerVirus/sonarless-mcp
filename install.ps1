@@ -76,4 +76,11 @@ if ($env:SONARLESS_MCP_NO_SETUP -eq '1') { return }
 Write-Host ''
 if ($args.Count -gt 0) { & $exe setup @args }
 elseif ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) { & $exe setup }
-else { Write-Host 'Run `sonarless-mcp setup` to register it in your AI clients.' }
+else {
+    # No terminal (an AI agent or a script): show what was found and how to finish.
+    & $exe setup --list
+    Write-Host ''
+    Write-Host 'Next: register it in the clients you want, e.g.'
+    Write-Host '  sonarless-mcp setup --clients claude,cursor    (or --yes for every detected client)'
+    Write-Host 'then restart those clients.'
+}

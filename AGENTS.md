@@ -28,7 +28,8 @@ in the README and LICENSE.
 | `internal/remote/` | remote SonarQube servers (remotes.json + private token files) |
 | `internal/clients/` | AI client detection and config editing |
 | `internal/tui/` | the setup picker (bubbletea) |
-| `install.sh`, `install.ps1` | one-line installers |
+| `install` | single entry script, valid sh and PowerShell; hands off to the platform installer |
+| `install.sh`, `install.ps1` | platform installers (download, verify, install, then `setup`) |
 
 ## Develop
 

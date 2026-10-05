@@ -25,41 +25,25 @@ Codex — at once. Single binary for Linux, macOS and Windows.
 
 ## Install
 
-### With one prompt (any OS)
-
-Paste this into your AI agent (Claude Code, Cursor, opencode, Codex, ...); it
-figures out your OS and does the rest:
+One installer for Linux, macOS and Windows — tell your AI agent:
 
 ```text
-Install sonarless-mcp (https://github.com/BrainerVirus/sonarless-mcp) for me.
-1. Check my OS. On Linux or macOS run:
-   curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.sh | SONARLESS_MCP_NO_SETUP=1 sh
-   On Windows run in PowerShell:
-   $env:SONARLESS_MCP_NO_SETUP='1'; irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.ps1 | iex
-2. Run `sonarless-mcp setup --list`, show me which AI clients were detected,
-   and ask which ones to register (default: all detected).
-3. Register them with `sonarless-mcp setup --clients <ids>` and tell me to
-   restart those clients. If Docker isn't installed, tell me how to get it.
+Install sonarless-mcp: https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install
 ```
 
-### With one command
-
-**Linux / macOS**
+or run it yourself (same script; your shell picks its half):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | sh     # Linux, macOS
+irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | iex           # Windows PowerShell
 ```
 
-**Windows (PowerShell)**
-
-```powershell
-irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.ps1 | iex
-```
-
-The installer detects your OS and CPU, downloads the matching release,
-verifies its SHA-256 checksum, installs the binary (`~/.local/bin` or
+`install` is a single file that is valid in both `sh` and PowerShell; it hands
+off to the platform installer, which detects your CPU, downloads the matching
+release, verifies its SHA-256 checksum, installs the binary (`~/.local/bin` or
 `%LOCALAPPDATA%\Programs\sonarless-mcp`, added to your PATH), then opens the
-client picker:
+client picker (run by an agent, it lists the detected clients and the command
+to register them instead):
 
 ```
 Register the SonarQube MCP server in:
@@ -134,6 +118,8 @@ company's CI server — and ask the agent about either:
 
 ```sh
 sonarless-mcp remote add work --url http://sonar.internal:9000 --branch develop   # token: hidden prompt
+sonarless-mcp remote update work --token                # new token (hidden prompt); keeps url/branch
+sonarless-mcp remote update work --url http://10.0.0.5:9000   # server moved; keeps token
 sonarless-mcp remote list        # name, reachable/unreachable, url, default branch
 sonarless-mcp remote import work --branch develop   # reuse a SonarQube MCP entry another client already has
 sonarless-mcp remote remove work
