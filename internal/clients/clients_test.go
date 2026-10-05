@@ -3,6 +3,7 @@ package clients
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -30,7 +31,7 @@ func TestJSONSetKeepsOrderAndOtherEntries(t *testing.T) {
 	if !strings.Contains(s, `"context7"`) || strings.Index(s, `"context7"`) > strings.Index(s, `"sonarqube"`) {
 		t.Errorf("existing server lost or reordered:\n%s", s)
 	}
-	if fi, _ := os.Stat(f); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(f); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // no unix modes on Windows
 		t.Errorf("mode changed to %v", fi.Mode().Perm())
 	}
 	if !jsonHas(f, "mcp", ServerName) {
