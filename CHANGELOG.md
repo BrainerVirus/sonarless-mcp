@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.3.5](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.4...v0.3.5) (2026-10-05)
+
+### Bug Fixes
+
+* **remote:** refuse analysis tokens with a clear explanation ([4bc5f13](https://github.com/BrainerVirus/sonarless-mcp/commit/4bc5f13857460157ec5605268d9540aabf8cda0c))
+
 ## [0.3.4](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.3...v0.3.4) (2026-10-05)
 
 ### Bug Fixes
