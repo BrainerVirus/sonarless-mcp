@@ -25,6 +25,25 @@ Codex — at once. Single binary for Linux, macOS and Windows.
 
 ## Install
 
+### With one prompt (any OS)
+
+Paste this into your AI agent (Claude Code, Cursor, opencode, Codex, ...); it
+figures out your OS and does the rest:
+
+```text
+Install sonarless-mcp (https://github.com/BrainerVirus/sonarless-mcp) for me.
+1. Check my OS. On Linux or macOS run:
+   curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.sh | SONARLESS_MCP_NO_SETUP=1 sh
+   On Windows run in PowerShell:
+   $env:SONARLESS_MCP_NO_SETUP='1'; irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.ps1 | iex
+2. Run `sonarless-mcp setup --list`, show me which AI clients were detected,
+   and ask which ones to register (default: all detected).
+3. Register them with `sonarless-mcp setup --clients <ids>` and tell me to
+   restart those clients. If Docker isn't installed, tell me how to get it.
+```
+
+### With one command
+
 **Linux / macOS**
 
 ```sh
@@ -67,12 +86,24 @@ Or with Go: `go install github.com/BrainerVirus/sonarless-mcp/cmd/sonarless-mcp@
 
 Requires Docker (Docker Desktop on macOS/Windows).
 
+## Updating
+
+Installed binaries keep themselves current: once a day, starting the MCP shim,
+`start` or `scan` checks GitHub Releases in the background, downloads a newer
+release, verifies its checksum, smoke-tests it and swaps it in, so the next
+start runs it. The same check pulls the latest SonarQube MCP image, which the
+shared container picks up the next time it starts from stopped (never mid-session).
+Run `sonarless-mcp update` to do it now; `SONARLESS_AUTO_UPDATE=false` turns the
+daily check off. Log: `<cache dir>/sonarless-mcp/update.log`.
+
 ## Use with AI agents
 
 `sonarless-mcp setup` registers a `sonarqube` MCP server in each client
 (Claude Code via `claude mcp add`, Cursor `~/.cursor/mcp.json`, opencode
 `opencode.json`, VS Code user `mcp.json`, Codex `config.toml`), editing only
-that entry. To do it by hand, `sonarless-mcp mcp-config <client>` prints the
+that entry. If a client already has a different `sonarqube` server (say, your
+company's remote SonarQube), it is left untouched and sonarless-mcp registers as
+`sonarqube-local` instead. To do it by hand, `sonarless-mcp mcp-config <client>` prints the
 snippet.
 
 How it works:
@@ -152,6 +183,7 @@ SONARLESS_IDLE_TIMEOUT=30m
 | `SONARLESS_MCP_TOOLSETS` / `SONARLESS_MCP_READ_ONLY` | server defaults / `false` | passed to the MCP server |
 | `SONARLESS_IDLE_TIMEOUT` | `30m` | `0` keeps everything running |
 | `SONARLESS_INSTANCE` | `sonarless` | names the containers (`-server`, `-mcp`), network and volumes |
+| `SONARLESS_AUTO_UPDATE` | `true` | daily background update check (binary + MCP image) |
 | `SONARLESS_PLUGINS_DIR` | `<config dir>/plugins` | extra plugin jars (a `shellcheck` binary there is mounted into CLI scans) |
 | `SONARLESS_PROJECT_KEY` / `SONARLESS_PROJECT_NAME` | detected | per project |
 | `SONARLESS_SCANNER` / `SONARLESS_SCAN_TESTS` | auto / `false` | per project |
@@ -163,6 +195,12 @@ SonarQube's embedded database can't be upgraded across versions, so each
 version keeps its own data volumes: a new version starts with fresh history,
 and switching back restores the old one. `sonarless-mcp reset --yes` wipes the
 current version's history.
+
+## Contributing
+
+Conventional Commits drive fully automated releases (semantic-release +
+GoReleaser); see [AGENTS.md](AGENTS.md) for layout, testing rules and the
+release flow.
 
 ## Credits
 
