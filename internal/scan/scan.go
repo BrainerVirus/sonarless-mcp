@@ -57,7 +57,10 @@ func Run(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.
 	}
 	fmt.Fprintf(opt.Out, "Scanning %s\n  project: %s (%s)\n  name:    %s\n  scanner: %s\n", p.Root, p.Key, p.KeySource, p.Name, scanner)
 
-	props := map[string]string{"sonar.projectKey": p.Key, "sonar.projectName": p.Name}
+	// sonarless-mcp waits for the report itself and reports the gate; a
+	// scanner told to wait (sonar.qualitygate.wait in the project's settings)
+	// would exit non-zero on a failing gate and look like a failed scan.
+	props := map[string]string{"sonar.projectKey": p.Key, "sonar.projectName": p.Name, "sonar.qualitygate.wait": "false"}
 	for _, kv := range opt.ExtraArgs {
 		k, v, _ := strings.Cut(strings.TrimPrefix(kv, "-D"), "=")
 		props[k] = v
@@ -116,7 +119,7 @@ func runCLI(ctx context.Context, cfg *config.Config, p *project.Project, token s
 	}
 	args = append(args, cfg.Get(config.ScannerImage))
 	args = append(args, defineArgs("-D", props)...)
-	return docker.Stream(ctx, args...)
+	return docker.Stream(ctx, opt.Out, args...)
 }
 
 // runMaven prefers the project's wrapper, then a local mvn, then a container.
@@ -140,7 +143,7 @@ func runMaven(ctx context.Context, cfg *config.Config, p *project.Project, token
 	args = append(args, goals...)
 	args = append(args, networkProps(cfg, token, props)...)
 	fmt.Fprintln(opt.Out, "  (no mvnw/mvn found; using the maven container)")
-	return docker.Stream(ctx, args...)
+	return docker.Stream(ctx, opt.Out, args...)
 }
 
 // gradleInit applies the SonarQube plugin to builds that don't declare it.
@@ -186,7 +189,7 @@ func runGradle(ctx context.Context, cfg *config.Config, p *project.Project, toke
 	args = append(args, tasks...)
 	args = append(args, networkProps(cfg, token, props)...)
 	fmt.Fprintln(opt.Out, "  (no gradlew/gradle found; using the gradle container)")
-	return docker.Stream(ctx, args...)
+	return docker.Stream(ctx, opt.Out, args...)
 }
 
 // runDotnet uses the dotnet-sonarscanner global tool (begin, build, end).
@@ -251,7 +254,7 @@ func wrapper(root, name string) string {
 
 func local(ctx context.Context, dir, bin string, args []string, out io.Writer) error {
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, out, os.Stderr
+	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, out, out
 	return cmd.Run()
 }
 

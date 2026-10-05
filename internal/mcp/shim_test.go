@@ -248,3 +248,36 @@ func TestToolFailureShape(t *testing.T) {
 		t.Errorf("got %s (%v)", out.String(), err)
 	}
 }
+
+func TestLocalTools(t *testing.T) {
+	s := newTestShim(t)
+	addRemote(s, true)
+	called := false
+	s.Local = []LocalTool{{Name: "sonarless_status", Description: "status",
+		Run: func(context.Context, map[string]any) (string, bool) { called = true; return "all good", false }}}
+
+	var r struct {
+		Tools []struct {
+			Name        string
+			InputSchema struct{ Properties map[string]any }
+		}
+	}
+	_ = json.Unmarshal(s.annotateTools(json.RawMessage(toolsList)), &r)
+	last := r.Tools[len(r.Tools)-1]
+	if last.Name != "sonarless_status" {
+		t.Fatalf("local tool not listed: %+v", r.Tools)
+	}
+	if _, ok := last.InputSchema.Properties["server"]; ok {
+		t.Error("local tool got the server argument")
+	}
+
+	// Answered by the shim itself, even though nothing has booted.
+	var out bytes.Buffer
+	s.out = &out
+	s.booted = make(chan struct{}) // never closed: SonarQube still "starting"
+	s.handle(context.Background(), message{JSONRPC: "2.0", ID: json.RawMessage("5"), Method: "tools/call",
+		Params: json.RawMessage(`{"name":"sonarless_status","arguments":{}}`)})
+	if !called || !strings.Contains(out.String(), "all good") || !strings.Contains(out.String(), `"id":5`) {
+		t.Errorf("called=%v out=%s", called, out.String())
+	}
+}

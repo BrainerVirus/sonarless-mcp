@@ -207,3 +207,45 @@ func TestFindSonarQubeCredentials(t *testing.T) {
 		t.Errorf("got %+v", got)
 	}
 }
+
+func TestSkillInstallRespectsUserSkill(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("CODEX_HOME", "")
+	env := Env{Home: home, GOOS: "linux"}
+	claude := clientByID("claude")
+
+	f, err := claude.InstallSkill(env)
+	if err != nil || f == "" {
+		t.Fatalf("install: %q %v", f, err)
+	}
+	b, _ := os.ReadFile(f)
+	if !strings.Contains(string(b), "name: sonarless-mcp") || !strings.Contains(string(b), skillMarker) {
+		t.Errorf("skill content: %.80s", b)
+	}
+	// Outdated copy gets refreshed after an update.
+	_ = os.WriteFile(f, []byte("old "+skillMarker), 0o644)
+	if n := RefreshSkills(env); n != 1 {
+		t.Errorf("refreshed %d", n)
+	}
+	if err := claude.RemoveSkill(env); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Dir(f)); !os.IsNotExist(err) {
+		t.Error("skill dir left behind")
+	}
+
+	// A user's own skill with the same name is never touched.
+	_ = os.MkdirAll(filepath.Dir(f), 0o755)
+	_ = os.WriteFile(f, []byte("my own notes"), 0o644)
+	if got, _ := claude.InstallSkill(env); got != "" {
+		t.Error("overwrote the user's skill")
+	}
+	_ = claude.RemoveSkill(env)
+	if b, _ := os.ReadFile(f); string(b) != "my own notes" {
+		t.Error("removed the user's skill")
+	}
+	if clientByID("vscode").SkillDir(env) != "" {
+		t.Error("vscode has no skills dir")
+	}
+}

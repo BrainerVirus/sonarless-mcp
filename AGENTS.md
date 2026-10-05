@@ -16,7 +16,7 @@ in the README and LICENSE.
 
 | Path | Owns |
 |---|---|
-| `cmd/sonarless-mcp/` | CLI commands (cobra); `setup.go` wizard, `update.go` self-update |
+| `cmd/sonarless-mcp/` | CLI commands (cobra); `setup.go` wizard, `update.go` self-update, `agenttools.go` the `sonarless_*` MCP tools |
 | `internal/config/` | layered settings: defaults < user `config.env` < project `.sonarless.env` < env |
 | `internal/docker/` | thin `docker` CLI wrapper (no SDK) |
 | `internal/sonar/` | SonarQube API client, server container lifecycle, shared token, file locks |
@@ -26,7 +26,7 @@ in the README and LICENSE.
 | `internal/idle/` | activity stamp, idle watcher, detached process spawning |
 | `internal/update/` | release check, checksum-verified self-replace |
 | `internal/remote/` | remote SonarQube servers (remotes.json + private token files) |
-| `internal/clients/` | AI client detection and config editing |
+| `internal/clients/` | AI client detection, config editing, the embedded agent skill (`skill/SKILL.md`) |
 | `internal/tui/` | the setup picker (bubbletea) |
 | `install` | single entry script, valid sh and PowerShell; hands off to the platform installer |
 | `install.sh`, `install.ps1` | platform installers (download, verify, install, then `setup`) |
@@ -52,7 +52,8 @@ git config core.hooksPath .githooks   # once per clone: local commit-msg check
   shim can reach; progress goes to stderr.
 - Anything several clients can do at once (create containers, refresh the
   token, update) takes a lock via `sonar.LockFile`.
-- Changing user-visible behavior or settings: update `README.md` in the same change.
+- Changing user-visible behavior or settings: update `README.md` in the same change, and
+  `internal/clients/skill/SKILL.md` if agents should know about it.
 
 ## Commits and releases
 

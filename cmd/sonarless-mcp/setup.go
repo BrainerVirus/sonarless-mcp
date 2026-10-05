@@ -107,6 +107,7 @@ picks every detected client (or every configured one with --remove);
 						failed = append(failed, c.Label)
 						continue
 					}
+					_ = c.RemoveSkill(env)
 					fmt.Printf("  ✓ %-12s removed from %s\n", c.Label, c.Where(env))
 					continue
 				}
@@ -121,6 +122,11 @@ picks every detected client (or every configured one with --remove);
 					note = fmt.Sprintf(" (your existing %q server was left as is)", clients.ServerName)
 				}
 				fmt.Printf("  ✓ %-12s registered as %q in %s%s\n", c.Label, name, c.Where(env), note)
+				if f, err := c.InstallSkill(env); err != nil {
+					fmt.Printf("    (skill not installed: %v)\n", err)
+				} else if f != "" {
+					fmt.Printf("    + skill %s\n", f)
+				}
 			}
 			if !remove {
 				fmt.Println("\nRestart the clients to load it. The first tool call pulls the SonarQube images (a few GB);")

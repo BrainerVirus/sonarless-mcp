@@ -46,6 +46,7 @@ const (
 	ScanTests        = "SONARLESS_SCAN_TESTS"
 	MetricsFile      = "SONARLESS_METRICS_FILE"
 	AutoUpdate       = "SONARLESS_AUTO_UPDATE"
+	AgentTools       = "SONARLESS_MCP_AGENT_TOOLS"
 )
 
 // Keys is the full list of supported settings.
@@ -61,6 +62,7 @@ var Keys = []Key{
 	{Name: MCPReadOnly, Default: "false", Help: "disable MCP write tools"},
 	{Name: IdleTimeoutKey, Default: "30m", Help: "stop server+MCP after this long unused; 0 disables"},
 	{Name: Instance, Default: "sonarless", Help: "prefix for the containers, network and volumes"},
+	{Name: AgentTools, Default: "true", Help: "expose sonarless_* tools (scan, status, project, remote sync) to agents next to the SonarQube tools"},
 	{Name: AutoUpdate, Default: "true", Help: "check daily for a new sonarless-mcp release and MCP image, installed on next start"},
 	{Name: ProjectKey, Project: true, Help: "override the detected project key"},
 	{Name: ProjectName, Project: true, Help: "override the detected project name"},

@@ -120,7 +120,8 @@ func (b *Backend) refresh(ctx context.Context, force bool) error {
 // agent picks with the extra `server` argument.
 type Shim struct {
 	Cfg      *config.Config
-	Backends []*Backend // [0] is the default (local)
+	Backends []*Backend  // [0] is the default (local)
+	Local    []LocalTool // sonarless-mcp's own tools, answered by the shim
 	Project  *project.Project
 	Log      io.Writer
 
@@ -205,6 +206,16 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 				s.reply(msg, cached)
 				return
 			}
+		}
+	}
+	if msg.Method == "tools/call" && msg.isRequest() {
+		var p struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal(msg.Params, &p)
+		if t := s.localTool(p.Name); t != nil {
+			s.runLocal(ctx, msg, t)
+			return
 		}
 	}
 	if !msg.isRequest() {

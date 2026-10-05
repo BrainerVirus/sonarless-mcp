@@ -20,6 +20,10 @@ func (s *Shim) annotateInitialize(result json.RawMessage) json.RawMessage {
 			" about CI or remote results. Remotes can be offline (e.g. VPN not connected): if one is unreachable, say so" +
 			" and carry on with the local server.")
 	}
+	if len(s.Local) > 0 {
+		note.WriteString("\n\nsonarless-mcp also provides its own tools (sonarless_status, sonarless_project, sonarless_scan" +
+			", sonarless_remote_sync when remotes exist) to check setup, scan this workspace and align local rules with CI.")
+	}
 	if note.Len() == 0 {
 		return result
 	}
@@ -47,6 +51,10 @@ func (s *Shim) serverHelp() string {
 // annotateTools makes projectKey optional (the shim fills it in), documents
 // the default, and adds the `server` argument when remotes are configured.
 func (s *Shim) annotateTools(result json.RawMessage) json.RawMessage {
+	return s.withLocalTools(s.annotateRemoteTools(result))
+}
+
+func (s *Shim) annotateRemoteTools(result json.RawMessage) json.RawMessage {
 	inject := s.Project != nil && s.local().inject.Load()
 	multi := len(s.Backends) > 1
 	if !inject && !multi {

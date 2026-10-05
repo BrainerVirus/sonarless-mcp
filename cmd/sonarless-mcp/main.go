@@ -301,7 +301,7 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 			if err != nil {
 				return err
 			}
-			shim := &mcp.Shim{Cfg: e.cfg, Backends: backends, Project: e.project, Log: os.Stderr}
+			shim := &mcp.Shim{Cfg: e.cfg, Backends: backends, Local: agentTools(e), Project: e.project, Log: os.Stderr}
 			return shim.Run(ctx, os.Stdin, os.Stdout)
 		},
 	}

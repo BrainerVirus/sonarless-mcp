@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
+	"io"
 	"os/exec"
 	"strings"
 )
@@ -35,10 +35,11 @@ func Run(ctx context.Context, args ...string) (string, error) {
 	return strings.TrimSpace(out.String()), nil
 }
 
-// Stream executes `docker args...` with the process's stdio attached.
-func Stream(ctx context.Context, args ...string) error {
+// Stream executes `docker args...`, sending its output to out (stdout and
+// stderr both). Never os.Stdout from MCP code paths: there it's the protocol.
+func Stream(ctx context.Context, out io.Writer, args ...string) error {
 	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.Stdout, cmd.Stderr = out, out
 	return cmd.Run()
 }
 

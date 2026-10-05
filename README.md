@@ -127,6 +127,27 @@ opencode ────┘  (tiny stdio shim,   │ (SonarQube MCP, HTTP,    │  
   UI traffic, a background watcher stops both containers. The next request
   resumes them, history intact.
 
+## What agents get
+
+Besides SonarQube's own tools, the `sonarqube` MCP server offers sonarless-mcp's
+features as tools, so any client can use them without knowing the CLI:
+
+| Tool | Does |
+|---|---|
+| `sonarless_status` | local containers, remotes and whether they're reachable |
+| `sonarless_project` | detected project key/name, its source, which servers have it |
+| `sonarless_scan` | scan the workspace locally and report the quality gate |
+| `sonarless_remote_sync` | align local rules with a remote (CI) — when remotes exist |
+
+Anything that needs a token (adding a remote, changing its token) stays a
+terminal command: the tools tell the agent the exact command to give you, and a
+token never passes through the chat. `SONARLESS_MCP_AGENT_TOOLS=false` hides them.
+
+`sonarless-mcp setup` also installs a **sonarless-mcp skill** for clients with
+skills (Claude Code, Cursor, opencode, Codex) — a short guide the agent loads
+when you ask about SonarQube or sonarless, kept current by updates and never
+written over a skill of yours with the same name.
+
 ## Remote SonarQube servers
 
 Next to the local server you can add any number of remote ones — typically your
@@ -230,6 +251,7 @@ SONARLESS_IDLE_TIMEOUT=30m
 | `SONARLESS_IDLE_TIMEOUT` | `30m` | `0` keeps everything running |
 | `SONARLESS_INSTANCE` | `sonarless` | names the containers (`-server`, `-mcp`), network and volumes |
 | `SONARLESS_AUTO_UPDATE` | `true` | daily background update check (binary + MCP image) |
+| `SONARLESS_MCP_AGENT_TOOLS` | `true` | expose the `sonarless_*` tools to agents |
 | `SONARLESS_PLUGINS_DIR` | `<config dir>/plugins` | extra plugin jars (a `shellcheck` binary there is mounted into CLI scans) |
 | `SONARLESS_PROJECT_KEY` / `SONARLESS_PROJECT_NAME` | detected | per project |
 | `SONARLESS_SCANNER` / `SONARLESS_SCAN_TESTS` | auto / `false` | per project |

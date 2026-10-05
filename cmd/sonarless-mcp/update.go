@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/BrainerVirus/sonarless-mcp/internal/clients"
 	"github.com/BrainerVirus/sonarless-mcp/internal/config"
 	"github.com/BrainerVirus/sonarless-mcp/internal/docker"
 	"github.com/BrainerVirus/sonarless-mcp/internal/idle"
@@ -16,6 +17,8 @@ import (
 // autoUpdate starts the daily background update check when one is due. It
 // never blocks or fails the command that triggered it.
 func autoUpdate(cfg *config.Config) {
+	// A new release may carry a new skill text: keep installed copies current.
+	clients.RefreshSkills(clients.DefaultEnv())
 	if update.Enabled(cfg, version) && update.Due(cfg) {
 		_ = idle.Spawn(cfg, "update.log", "update", "--background")
 	}
@@ -53,6 +56,9 @@ turns that off).`,
 				fmt.Printf("%supdated sonarless-mcp %s -> %s (%s); restart your AI clients to use it\n", stamp(), res.Current, res.Latest, res.Path)
 			} else if !background {
 				fmt.Printf("sonarless-mcp %s is the latest\n", res.Current)
+			}
+			if n := clients.RefreshSkills(clients.DefaultEnv()); n > 0 && !background {
+				fmt.Printf("refreshed the sonarless-mcp skill in %d client(s)\n", n)
 			}
 			if docker.Available(ctx) == nil {
 				img := e.cfg.Get(config.MCPImage)
