@@ -67,6 +67,11 @@ Register the SonarQube MCP server in:
 ↑/↓ move · space toggle · a all · n none · enter confirm · esc cancel
 ```
 
+If `~/.local/bin` isn't on your PATH yet, the installer adds it to your shell's
+startup file (zsh, bash or fish) once. A shell that was already open may need
+`rehash` (zsh) or `hash -r` (bash) — or a new terminal — to see the new
+command; the installer prints the exact one.
+
 Installed clients are preselected; untick any you don't want, or clear them
 all. Run it again any time with `sonarless-mcp setup` (`--remove` to
 unregister, `--yes` / `--clients claude,cursor` for scripts). Installer options:

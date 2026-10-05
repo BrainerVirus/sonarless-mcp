@@ -74,10 +74,39 @@ chmod 755 "$INSTALL_DIR/.sonarless-mcp.new"
 mv -f "$INSTALL_DIR/.sonarless-mcp.new" "$INSTALL_DIR/sonarless-mcp"
 say "Installed $("$INSTALL_DIR/sonarless-mcp" --version) to $INSTALL_DIR/sonarless-mcp"
 
-case ":$PATH:" in
-  *":$INSTALL_DIR:"*) ;;
-  *) say "note: $INSTALL_DIR is not on your PATH; add it to your shell profile." ;;
+# Make the command findable. A child process can't change the calling shell,
+# so: put INSTALL_DIR on PATH for future shells (once, marked), and tell the
+# user the one command that refreshes the current one.
+shell_name="$(basename "${SHELL:-sh}")"
+on_path=1
+case ":$PATH:" in *":$INSTALL_DIR:"*) ;; *) on_path=0 ;; esac
+if [ "$on_path" = 0 ]; then
+  marker="# added by sonarless-mcp installer"
+  case "$shell_name" in
+    zsh) rc="${ZDOTDIR:-$HOME}/.zshrc"; line="export PATH=\"$INSTALL_DIR:\$PATH\" $marker" ;;
+    bash) if [ "$os" = darwin ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi
+      line="export PATH=\"$INSTALL_DIR:\$PATH\" $marker" ;;
+    fish) rc="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/sonarless-mcp.fish"; line="fish_add_path $INSTALL_DIR $marker" ;;
+    *) rc="$HOME/.profile"; line="export PATH=\"$INSTALL_DIR:\$PATH\" $marker" ;;
+  esac
+  if ! grep -qs "$marker" "$rc"; then
+    mkdir -p "$(dirname "$rc")"
+    printf '\n%s\n' "$line" >> "$rc"
+    say "Added $INSTALL_DIR to your PATH in $rc."
+  fi
+fi
+case "$shell_name" in
+  zsh) refresh="rehash" ;;
+  bash) refresh="hash -r" ;;
+  *) refresh="" ;;
 esac
+if [ "$on_path" = 0 ]; then
+  now="export PATH=\"$INSTALL_DIR:\$PATH\""
+  [ "$shell_name" = fish ] && now="fish_add_path $INSTALL_DIR"
+  say "To use sonarless-mcp in this terminal now, run:  $now   (new terminals pick it up)"
+elif [ -n "$refresh" ]; then
+  say "If this terminal doesn't find sonarless-mcp yet, run:  $refresh   (or open a new terminal)"
+fi
 command -v docker >/dev/null 2>&1 || say "note: Docker not found; sonarless-mcp needs Docker (Docker Desktop on macOS) to run SonarQube."
 
 [ "${SONARLESS_MCP_NO_SETUP:-}" = 1 ] && exit 0
