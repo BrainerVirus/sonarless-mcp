@@ -135,11 +135,15 @@ func runMaven(ctx context.Context, cfg *config.Config, p *project.Project, token
 	if bin, err := exec.LookPath("mvn"); err == nil {
 		return local(ctx, p.Root, bin, append(goals, hostProps(cfg, token, props)...), opt.Out)
 	}
-	home, _ := os.UserHomeDir()
-	args := []string{"run", "--rm", "--network", cfg.Network(),
+	m2, err := cacheDir(".m2")
+	if err != nil {
+		return err
+	}
+	args := append([]string{"run", "--rm", "--network", cfg.Network(),
 		"-v", p.Root + ":/usr/src", "-w", "/usr/src",
-		"-v", filepath.Join(home, ".m2") + ":/root/.m2",
-		"maven:3-eclipse-temurin-21", "mvn"}
+		"-v", m2 + ":/tmp/.m2", "-e", "MAVEN_CONFIG=/tmp/.m2"}, asUser()...)
+	// user.home=/tmp: writable for any uid (the scanner caches in ~/.sonar).
+	args = append(args, "maven:3-eclipse-temurin-21", "mvn", "-Duser.home=/tmp")
 	args = append(args, goals...)
 	args = append(args, networkProps(cfg, token, props)...)
 	fmt.Fprintln(opt.Out, "  (no mvnw/mvn found; using the maven container)")
@@ -180,12 +184,15 @@ func runGradle(ctx context.Context, cfg *config.Config, p *project.Project, toke
 	if bin, err := exec.LookPath("gradle"); err == nil {
 		return local(ctx, p.Root, bin, append(append([]string{"-I", initFile}, tasks...), hostProps(cfg, token, props)...), opt.Out)
 	}
-	home, _ := os.UserHomeDir()
-	args := []string{"run", "--rm", "--network", cfg.Network(),
+	gh, err := cacheDir(".gradle")
+	if err != nil {
+		return err
+	}
+	args := append([]string{"run", "--rm", "--network", cfg.Network(),
 		"-v", p.Root + ":/usr/src", "-w", "/usr/src",
-		"-v", filepath.Join(home, ".gradle") + ":/root/.gradle",
-		"-v", initFile + ":/sonarless-init.gradle:ro",
-		"gradle:jdk21", "gradle", "-I", "/sonarless-init.gradle"}
+		"-v", gh + ":/gradle-home", "-e", "GRADLE_USER_HOME=/gradle-home",
+		"-v", initFile + ":/sonarless-init.gradle:ro"}, asUser()...)
+	args = append(args, "gradle:jdk21", "gradle", "-I", "/sonarless-init.gradle")
 	args = append(args, tasks...)
 	args = append(args, networkProps(cfg, token, props)...)
 	fmt.Fprintln(opt.Out, "  (no gradlew/gradle found; using the gradle container)")
@@ -282,6 +289,27 @@ func waitProcessed(ctx context.Context, cfg *config.Config, srv *sonar.Server, k
 	gate, _ := admin.QualityGate(ctx, key)
 	fmt.Fprintf(out, "\nDone. Quality gate: %s\n  %s/dashboard?id=%s\n", gate, cfg.ServerURL(), key)
 	return nil
+}
+
+// asUser runs a build container as the current user on Linux, so build
+// output in the project and the shared caches stay owned by the user (Docker
+// Desktop on macOS/Windows maps ownership itself).
+func asUser() []string {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	return []string{"--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "-e", "HOME=/tmp"}
+}
+
+// cacheDir returns ~/<name>, creating it as the user first: if Docker had to
+// create a missing bind-mount source it would make it root-owned.
+func cacheDir(name string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	d := filepath.Join(home, name)
+	return d, os.MkdirAll(d, 0o755)
 }
 
 func fileExists(p string) bool { fi, err := os.Stat(p); return err == nil && !fi.IsDir() }

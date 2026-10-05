@@ -143,6 +143,18 @@ func (s *Server) create(ctx context.Context) error {
 	}
 	args = append(args, s.Cfg.ServerImage())
 	_, err := docker.Run(ctx, args...)
+	if hinted := portHint(err, s.Cfg.Get(config.ServerPort), config.ServerPort); hinted != err {
+		_ = docker.Remove(ctx, s.name()) // don't leave a container that can never start
+		return hinted
+	}
+	return err
+}
+
+// portHint turns Docker's "address already in use" into an actionable error.
+func portHint(err error, port, key string) error {
+	if err != nil && (strings.Contains(err.Error(), "address already in use") || strings.Contains(err.Error(), "port is already allocated")) {
+		return fmt.Errorf("port %s is already in use by another program; stop it or set %s to a free port (e.g. in config.env)", port, key)
+	}
 	return err
 }
 
