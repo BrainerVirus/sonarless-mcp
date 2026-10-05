@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.3.6](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.5...v0.3.6) (2026-10-05)
+
+### Bug Fixes
+
+* **remote:** run remote MCP containers on the local container's exact image ([dfc8ac8](https://github.com/BrainerVirus/sonarless-mcp/commit/dfc8ac803b16be2f29379c10bd00936fd4552648))
+
 ## [0.3.5](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.4...v0.3.5) (2026-10-05)
 
 ### Bug Fixes
