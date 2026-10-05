@@ -28,7 +28,7 @@ type Client struct {
 	// Detected: the client is installed. Configured: sonarqube is registered.
 	Detected   func(env Env) bool
 	Configured func(env Env) bool
-	Register   func(env Env, exe string) error
+	Register   func(env Env, exe string) (name string, err error)
 	Remove     func(env Env) error
 	// Where says which file or command a change goes to.
 	Where func(env Env) string
@@ -39,7 +39,7 @@ type Env struct {
 	Home string
 	GOOS string
 	Look func(name string) (string, error) // PATH lookup
-	Run  func(name string, args ...string) error
+	Run  func(name string, args ...string) (string, error)
 	App  func(path string) bool // an app install path exists
 }
 
@@ -61,18 +61,18 @@ func DefaultEnv() Env {
 		}
 		return "", exec.ErrNotFound
 	}
-	e.Run = func(name string, args ...string) error {
+	e.Run = func(name string, args ...string) (string, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		path, err := e.Look(name)
 		if err != nil {
-			return err
+			return "", err
 		}
 		out, err := exec.CommandContext(ctx, path, args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("%s %s: %v: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+			return string(out), fmt.Errorf("%s %s: %v: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 		}
-		return nil
+		return string(out), nil
 	}
 	return e
 }
@@ -136,31 +136,107 @@ func All() []Client {
 	return []Client{claude(), cursor(), opencode(), vscode(), codex()}
 }
 
+// --- ownership: only entries that run sonarless-mcp are ours ---
+
+// AltServerName is used when the user already has a different "sonarqube"
+// server (e.g. a remote SonarQube); that entry is never overwritten.
+const AltServerName = "sonarqube-local"
+
+var names = []string{ServerName, AltServerName}
+
+// ours reports whether a config entry launches sonarless-mcp.
+func ours(entry string) bool { return strings.Contains(entry, "sonarless-mcp") }
+
+// pickName returns the name to register under: ServerName unless it is taken
+// by someone else's server.
+func pickName(entry func(name string) (string, bool)) string {
+	if e, ok := entry(ServerName); ok && !ours(e) {
+		return AltServerName
+	}
+	return ServerName
+}
+
 // --- Claude Code: managed through its own CLI ---
 
 func claude() Client {
+	entry := func(e Env) func(string) (string, bool) {
+		return func(name string) (string, bool) {
+			out, err := e.Run("claude", "mcp", "get", name)
+			return out, err == nil
+		}
+	}
 	return Client{
 		ID: "claude", Label: "Claude Code",
 		Detected: func(e Env) bool { return e.has("claude") },
 		Configured: func(e Env) bool {
-			return e.has("claude") && e.Run("claude", "mcp", "get", ServerName) == nil
+			if !e.has("claude") {
+				return false
+			}
+			for _, n := range names {
+				if out, ok := entry(e)(n); ok && ours(out) {
+					return true
+				}
+			}
+			return false
 		},
-		Register: func(e Env, exe string) error {
-			_ = e.Run("claude", "mcp", "remove", "-s", "user", ServerName)
-			return e.Run("claude", "mcp", "add", "-s", "user", ServerName, "--", exe, "mcp")
+		Register: func(e Env, exe string) (string, error) {
+			name := pickName(entry(e))
+			_, _ = e.Run("claude", "mcp", "remove", "-s", "user", name)
+			_, err := e.Run("claude", "mcp", "add", "-s", "user", name, "--", exe, "mcp")
+			return name, err
 		},
-		Remove: func(e Env) error { return e.Run("claude", "mcp", "remove", "-s", "user", ServerName) },
-		Where:  func(Env) string { return "claude mcp add -s user" },
+		Remove: func(e Env) error {
+			for _, n := range names {
+				if out, ok := entry(e)(n); ok && ours(out) {
+					if _, err := e.Run("claude", "mcp", "remove", "-s", "user", n); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
+		Where: func(Env) string { return "claude mcp (user scope)" },
+	}
+}
+
+// jsonClient wires a client whose MCP servers live in one JSON object.
+func jsonClient(id, label string, file func(Env) string, section string, detected func(Env) bool, value func(exe string) map[string]any) Client {
+	entry := func(e Env) func(string) (string, bool) {
+		return func(name string) (string, bool) { return jsonEntry(file(e), section, name) }
+	}
+	return Client{
+		ID: id, Label: label, Detected: detected, Where: file,
+		Configured: func(e Env) bool {
+			for _, n := range names {
+				if v, ok := entry(e)(n); ok && ours(v) {
+					return true
+				}
+			}
+			return false
+		},
+		Register: func(e Env, exe string) (string, error) {
+			name := pickName(entry(e))
+			return name, jsonSet(file(e), section, name, value(exe))
+		},
+		Remove: func(e Env) error {
+			for _, n := range names {
+				if v, ok := entry(e)(n); ok && ours(v) {
+					if err := jsonDelete(file(e), section, n); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
 	}
 }
 
 // --- Cursor: ~/.cursor/mcp.json ---
 
 func cursor() Client {
-	file := func(e Env) string { return filepath.Join(e.Home, ".cursor", "mcp.json") }
-	return Client{
-		ID: "cursor", Label: "Cursor",
-		Detected: func(e Env) bool {
+	return jsonClient("cursor", "Cursor",
+		func(e Env) string { return filepath.Join(e.Home, ".cursor", "mcp.json") }, "mcpServers",
+		func(e Env) bool {
 			switch e.GOOS {
 			case "darwin":
 				if e.app("/Applications/Cursor.app") || e.app(filepath.Join(e.Home, "Applications", "Cursor.app")) {
@@ -177,45 +253,33 @@ func cursor() Client {
 			}
 			return e.has("cursor")
 		},
-		Configured: func(e Env) bool { return jsonHas(file(e), "mcpServers", ServerName) },
-		Register: func(e Env, exe string) error {
-			return jsonSet(file(e), "mcpServers", ServerName, map[string]any{
-				"command": exe, "args": []string{"mcp", "${workspaceFolder}"}})
-		},
-		Remove: func(e Env) error { return jsonDelete(file(e), "mcpServers", ServerName) },
-		Where:  file,
-	}
+		func(exe string) map[string]any {
+			return map[string]any{"command": exe, "args": []string{"mcp", "${workspaceFolder}"}}
+		})
 }
 
 // --- opencode: ~/.config/opencode/opencode.json ---
 
 func opencode() Client {
-	file := func(e Env) string {
-		if x := os.Getenv("XDG_CONFIG_HOME"); x != "" && e.GOOS != "windows" {
-			return filepath.Join(x, "opencode", "opencode.json")
-		}
-		return filepath.Join(e.Home, ".config", "opencode", "opencode.json")
-	}
-	return Client{
-		ID: "opencode", Label: "opencode",
-		Detected:   func(e Env) bool { return e.has("opencode") },
-		Configured: func(e Env) bool { return jsonHas(file(e), "mcp", ServerName) },
-		Register: func(e Env, exe string) error {
-			return jsonSet(file(e), "mcp", ServerName, map[string]any{
-				"type": "local", "enabled": true, "command": []string{exe, "mcp"}})
-		},
-		Remove: func(e Env) error { return jsonDelete(file(e), "mcp", ServerName) },
-		Where:  file,
-	}
+	return jsonClient("opencode", "opencode",
+		func(e Env) string {
+			if x := os.Getenv("XDG_CONFIG_HOME"); x != "" && e.GOOS != "windows" {
+				return filepath.Join(x, "opencode", "opencode.json")
+			}
+			return filepath.Join(e.Home, ".config", "opencode", "opencode.json")
+		}, "mcp",
+		func(e Env) bool { return e.has("opencode") },
+		func(exe string) map[string]any {
+			return map[string]any{"type": "local", "enabled": true, "command": []string{exe, "mcp"}}
+		})
 }
 
 // --- VS Code: user mcp.json ---
 
 func vscode() Client {
-	file := func(e Env) string { return filepath.Join(e.appData(), "Code", "User", "mcp.json") }
-	return Client{
-		ID: "vscode", Label: "VS Code",
-		Detected: func(e Env) bool {
+	return jsonClient("vscode", "VS Code",
+		func(e Env) string { return filepath.Join(e.appData(), "Code", "User", "mcp.json") }, "servers",
+		func(e Env) bool {
 			switch e.GOOS {
 			case "darwin":
 				if e.app("/Applications/Visual Studio Code.app") {
@@ -228,14 +292,9 @@ func vscode() Client {
 			}
 			return e.has("code")
 		},
-		Configured: func(e Env) bool { return jsonHas(file(e), "servers", ServerName) },
-		Register: func(e Env, exe string) error {
-			return jsonSet(file(e), "servers", ServerName, map[string]any{
-				"type": "stdio", "command": exe, "args": []string{"mcp", "${workspaceFolder}"}})
-		},
-		Remove: func(e Env) error { return jsonDelete(file(e), "servers", ServerName) },
-		Where:  file,
-	}
+		func(exe string) map[string]any {
+			return map[string]any{"type": "stdio", "command": exe, "args": []string{"mcp", "${workspaceFolder}"}}
+		})
 }
 
 // --- Codex: ~/.codex/config.toml ---
@@ -247,21 +306,43 @@ func codex() Client {
 		}
 		return filepath.Join(e.Home, ".codex", "config.toml")
 	}
-	header := "[mcp_servers." + ServerName + "]"
+	header := func(name string) string { return "[mcp_servers." + name + "]" }
+	entry := func(e Env) func(string) (string, bool) {
+		return func(name string) (string, bool) {
+			b, err := os.ReadFile(file(e))
+			if err != nil {
+				return "", false
+			}
+			return tomlBody(string(b), header(name))
+		}
+	}
 	return Client{
-		ID: "codex", Label: "Codex",
+		ID: "codex", Label: "Codex", Where: file,
 		Detected: func(e Env) bool { return e.has("codex") },
 		Configured: func(e Env) bool {
-			b, err := os.ReadFile(file(e))
-			return err == nil && tomlBlock(string(b), header) >= 0
+			for _, n := range names {
+				if v, ok := entry(e)(n); ok && ours(v) {
+					return true
+				}
+			}
+			return false
 		},
-		Register: func(e Env, exe string) error {
+		Register: func(e Env, exe string) (string, error) {
+			name := pickName(entry(e))
 			q, _ := json.Marshal(exe) // TOML basic strings share JSON's escaping
-			block := header + "\ncommand = " + string(q) + "\nargs = [\"mcp\"]\n"
-			return tomlReplace(file(e), header, block)
+			block := header(name) + "\ncommand = " + string(q) + "\nargs = [\"mcp\"]\n"
+			return name, tomlReplace(file(e), header(name), block)
 		},
-		Remove: func(e Env) error { return tomlReplace(file(e), header, "") },
-		Where:  file,
+		Remove: func(e Env) error {
+			for _, n := range names {
+				if v, ok := entry(e)(n); ok && ours(v) {
+					if err := tomlReplace(file(e), header(n), ""); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		},
 	}
 }
 
@@ -347,22 +428,25 @@ func readObject(file string) ([]kv, error) {
 	return obj, nil
 }
 
-func jsonHas(file, section, name string) bool {
+// jsonEntry returns the raw JSON of section.name, if present.
+func jsonEntry(file, section, name string) (string, bool) {
 	obj, err := readObject(file)
 	if err != nil {
-		return false
+		return "", false
 	}
 	sec, ok := get(obj, section)
 	if !ok {
-		return false
+		return "", false
 	}
 	inner, err := parseObject(sec)
 	if err != nil {
-		return false
+		return "", false
 	}
-	_, ok = get(inner, name)
-	return ok
+	v, ok := get(inner, name)
+	return string(v), ok
 }
+
+func jsonHas(file, section, name string) bool { _, ok := jsonEntry(file, section, name); return ok }
 
 func jsonSet(file, section, name string, value any) error {
 	obj, err := readObject(file)
@@ -420,6 +504,23 @@ func tomlBlock(s, header string) int {
 		}
 	}
 	return -1
+}
+
+// tomlBody returns the text of the table starting at header, if present.
+func tomlBody(s, header string) (string, bool) {
+	lines := strings.Split(s, "\n")
+	start := tomlBlock(s, header)
+	if start < 0 {
+		return "", false
+	}
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+			end = i
+			break
+		}
+	}
+	return strings.Join(lines[start:end], "\n"), true
 }
 
 // tomlReplace replaces the table starting at header (up to the next table

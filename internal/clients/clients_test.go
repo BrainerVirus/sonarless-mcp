@@ -125,3 +125,69 @@ func TestDetectionNeedsExecutable(t *testing.T) {
 		}
 	}
 }
+
+func clientByID(id string) Client {
+	for _, c := range All() {
+		if c.ID == id {
+			return c
+		}
+	}
+	panic(id)
+}
+
+func TestForeignEntryIsKept(t *testing.T) {
+	home := t.TempDir()
+	env := Env{Home: home, GOOS: "linux"}
+	f := filepath.Join(home, ".cursor", "mcp.json")
+	_ = os.MkdirAll(filepath.Dir(f), 0o755)
+	foreign := `{"mcpServers":{"sonarqube":{"command":"docker","args":["run","mcp/sonarqube"],"env":{"SONARQUBE_URL":"https://sonar.example.com"}}}}`
+	_ = os.WriteFile(f, []byte(foreign), 0o644)
+	c := clientByID("cursor")
+
+	if c.Configured(env) {
+		t.Fatal("someone else's sonarqube entry counted as ours")
+	}
+	name, err := c.Register(env, "/opt/bin/sonarless-mcp")
+	if err != nil || name != AltServerName {
+		t.Fatalf("Register = %q, %v; want %q", name, err, AltServerName)
+	}
+	if v, _ := jsonEntry(f, "mcpServers", ServerName); !strings.Contains(v, "sonar.example.com") {
+		t.Errorf("foreign entry changed: %s", v)
+	}
+	if !c.Configured(env) {
+		t.Error("not configured after register")
+	}
+	if name, _ := c.Register(env, "/opt/bin/sonarless-mcp"); name != AltServerName {
+		t.Errorf("re-register moved to %q", name)
+	}
+	if err := c.Remove(env); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := jsonEntry(f, "mcpServers", ServerName); !ok {
+		t.Error("Remove deleted the foreign entry")
+	}
+	if _, ok := jsonEntry(f, "mcpServers", AltServerName); ok {
+		t.Error("Remove left our entry")
+	}
+}
+
+func TestCodexForeignEntryIsKept(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", "")
+	env := Env{Home: home, GOOS: "linux"}
+	f := filepath.Join(home, ".codex", "config.toml")
+	_ = os.MkdirAll(filepath.Dir(f), 0o755)
+	_ = os.WriteFile(f, []byte("[mcp_servers.sonarqube]\ncommand = \"docker\"\n"), 0o644)
+	c := clientByID("codex")
+	if c.Configured(env) {
+		t.Fatal("foreign entry counted as ours")
+	}
+	if name, err := c.Register(env, "/opt/bin/sonarless-mcp"); err != nil || name != AltServerName {
+		t.Fatalf("Register = %q, %v", name, err)
+	}
+	_ = c.Remove(env)
+	b, _ := os.ReadFile(f)
+	if !strings.Contains(string(b), "[mcp_servers.sonarqube]") || strings.Contains(string(b), "sonarqube-local") {
+		t.Errorf("after remove:\n%s", b)
+	}
+}

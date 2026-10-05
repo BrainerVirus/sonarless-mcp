@@ -16,7 +16,7 @@ import (
 )
 
 func setupCommand() *cobra.Command {
-	var yes, remove bool
+	var yes, remove, list bool
 	var only []string
 	cmd := &cobra.Command{
 		Use:   "setup",
@@ -25,8 +25,9 @@ func setupCommand() *cobra.Command {
 "sonarqube" MCP server (backed by "sonarless-mcp mcp") in the ones you pick.
 Installed clients are preselected. With --remove, unregister instead.
 
-Non-interactive: --yes picks every detected client (or every configured one
-with --remove); --clients picks an explicit list.`,
+Non-interactive: --list shows what was found without changing anything; --yes
+picks every detected client (or every configured one with --remove);
+--clients picks an explicit list.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			exe, err := installedExe()
 			if err != nil {
@@ -53,6 +54,13 @@ with --remove); --clients picks an explicit list.`,
 					avail = configured
 				}
 				opts[i] = tui.Option{ID: c.ID, Label: c.Label, Tag: tag, Available: avail, Selected: avail}
+			}
+
+			if list {
+				for _, o := range opts {
+					fmt.Printf("  %-10s %-12s %s\n", o.ID, o.Label, o.Tag)
+				}
+				return nil
 			}
 
 			var chosen []string
@@ -93,19 +101,26 @@ with --remove); --clients picks an explicit list.`,
 			var failed []string
 			for _, id := range chosen {
 				c := byID[id]
-				var err error
-				verb := "registered in"
 				if remove {
-					err, verb = c.Remove(env), "removed from"
-				} else {
-					err = c.Register(env, exe)
+					if err := c.Remove(env); err != nil {
+						fmt.Printf("  ✗ %-12s %v\n", c.Label, err)
+						failed = append(failed, c.Label)
+						continue
+					}
+					fmt.Printf("  ✓ %-12s removed from %s\n", c.Label, c.Where(env))
+					continue
 				}
+				name, err := c.Register(env, exe)
 				if err != nil {
 					fmt.Printf("  ✗ %-12s %v\n", c.Label, err)
 					failed = append(failed, c.Label)
 					continue
 				}
-				fmt.Printf("  ✓ %-12s %s %s\n", c.Label, verb, c.Where(env))
+				note := ""
+				if name != clients.ServerName {
+					note = fmt.Sprintf(" (your existing %q server was left as is)", clients.ServerName)
+				}
+				fmt.Printf("  ✓ %-12s registered as %q in %s%s\n", c.Label, name, c.Where(env), note)
 			}
 			if !remove {
 				fmt.Println("\nRestart the clients to load it. The first tool call pulls the SonarQube images (a few GB);")
@@ -123,6 +138,7 @@ with --remove); --clients picks an explicit list.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "no picker: use every detected (or, with --remove, configured) client")
 	cmd.Flags().StringSliceVar(&only, "clients", nil, "no picker: these clients (claude,cursor,opencode,vscode,codex)")
 	cmd.Flags().BoolVar(&remove, "remove", false, "unregister instead of register")
+	cmd.Flags().BoolVar(&list, "list", false, "only show which clients are detected/configured; change nothing")
 	return cmd
 }
 
