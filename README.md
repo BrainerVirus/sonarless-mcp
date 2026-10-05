@@ -127,6 +127,7 @@ company's CI server — and ask the agent about either:
 sonarless-mcp remote add work --url http://sonar.internal:9000 --branch develop   # token: hidden prompt
 sonarless-mcp remote update work --token                # new token (hidden prompt); keeps url/branch
 sonarless-mcp remote update work --url http://10.0.0.5:9000   # server moved; keeps token
+sonarless-mcp remote update work --branch main                # CI now analyzes main; keeps url/token
 sonarless-mcp remote list        # name, reachable/unreachable, url, default branch
 sonarless-mcp remote import work --branch develop   # reuse a SonarQube MCP entry another client already has
 sonarless-mcp remote remove work
