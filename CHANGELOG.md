@@ -2,6 +2,13 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.3.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.2.1...v0.3.0) (2026-10-05)
+
+### Features
+
+* **install:** one cross-platform installer entry point ([1ae8eb9](https://github.com/BrainerVirus/sonarless-mcp/commit/1ae8eb95a40c9d89009aae36aa85c1853a25fcc4))
+* **remote:** add `remote update` to change a remote's url, branch or token ([c6ffce2](https://github.com/BrainerVirus/sonarless-mcp/commit/c6ffce23574078bddce00a562571aec1ad269379))
+
 ## [0.2.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.2.0...v0.2.1) (2026-10-05)
 
 ### Bug Fixes
