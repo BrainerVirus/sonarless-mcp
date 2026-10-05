@@ -2,6 +2,18 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.5.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.5.0...v0.5.1) (2026-10-05)
+
+### Bug Fixes
+
+* **clients:** keep symlinked configs and detect inline Codex entries ([8aaf0a6](https://github.com/BrainerVirus/sonarless-mcp/commit/8aaf0a6f7cea3e0f6f0f700f0085d8265885f1f4))
+* **config:** handle BOMs and comments after quoted values ([1462a3e](https://github.com/BrainerVirus/sonarless-mcp/commit/1462a3e9ecf9659ff3e62cfd79c1ccb78f7f832e))
+* **install:** Windows-safe updates, PATH via registry, no temp leaks ([ee72815](https://github.com/BrainerVirus/sonarless-mcp/commit/ee72815668489020a2b4a588a8d9def5efa3e07b))
+* **mcp:** degrade instead of failing, and never leave a request unanswered ([d3db59f](https://github.com/BrainerVirus/sonarless-mcp/commit/d3db59fa2b5567e8f745f6eec344de28fcc20f30))
+* **remote:** pick free ports and tell network errors from rejected tokens ([641a819](https://github.com/BrainerVirus/sonarless-mcp/commit/641a819cc4fd29d3fc8054df2a74984cb21f9b10))
+* **scan:** keep files user-owned and explain busy ports ([356d1f7](https://github.com/BrainerVirus/sonarless-mcp/commit/356d1f7988b62957b787769a52ade513ae6c27ec))
+* **sync:** apply what it can and report the rest ([534654c](https://github.com/BrainerVirus/sonarless-mcp/commit/534654c22f9c6558b53a85a0b452fd340126d18d))
+
 ## [0.5.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.4.0...v0.5.0) (2026-10-05)
 
 ### Features
