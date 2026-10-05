@@ -106,24 +106,43 @@ if [ "$on_path" = 0 ] && [ "${SONARLESS_MCP_NO_MODIFY_PATH:-}" != 1 ]; then
   fi
 fi
 # What makes the new command show up (and highlight as valid) in an already
-# open terminal depends on who checks commands: the shell (zsh-syntax-
-# highlighting & co. in Ghostty, Kitty, iTerm2, WezTerm, ...) re-reads PATH
-# after a rehash, but Warp's own input editor reads PATH only when a tab starts.
-case "$(basename "${SHELL:-sh}")" in
-  zsh) refresh="run: rehash" ;;
-  bash) refresh="run: hash -r" ;;
-  *) refresh="" ;;
-esac
+# open terminal depends on who checks commands. In almost every terminal it's
+# the shell (zsh-syntax-highlighting, fish, bash's hash table), refreshed by
+# `rehash` / `hash -r`; Warp's own input editor reads PATH only when a tab
+# starts. Terminals identify themselves through these variables.
+term="this terminal"
 case "${TERM_PROGRAM:-}" in
-  WarpTerminal) refresh="open a new tab (Warp reads PATH only when a tab starts; the command already works here)" ;;
+  WarpTerminal) term="Warp" ;;
+  ghostty) term="Ghostty" ;;
+  iTerm.app) term="iTerm2" ;;
+  Apple_Terminal) term="Terminal" ;;
+  vscode) term="the VS Code terminal" ;;
+  WezTerm) term="WezTerm" ;;
+  Hyper) term="Hyper" ;;
+  Tabby) term="Tabby" ;;
+  *)
+    if [ -n "${KITTY_WINDOW_ID:-}" ]; then term="kitty"
+    elif [ -n "${ALACRITTY_SOCKET:-}${ALACRITTY_LOG:-}" ]; then term="Alacritty"
+    elif [ -n "${KONSOLE_VERSION:-}" ]; then term="Konsole"
+    elif [ "${TERMINAL_EMULATOR:-}" = JetBrains-JediTerm ]; then term="the JetBrains terminal"
+    elif [ -n "${WT_SESSION:-}" ]; then term="Windows Terminal"
+    elif [ -n "${VTE_VERSION:-}" ]; then term="GNOME Terminal"
+    fi ;;
 esac
+case "$(basename "${SHELL:-sh}")" in
+  zsh) refresh="run: rehash   (or open a new tab)" ;;
+  bash) refresh="run: hash -r   (or open a new tab)" ;;
+  fish) refresh="" ;; # fish re-checks PATH by itself
+  *) refresh="open a new tab" ;;
+esac
+[ "$term" = Warp ] && refresh="open a new tab (Warp reads PATH only when a tab starts; the command already works here)"
 if [ "$on_path" = 0 ]; then
   now="export PATH=\"$INSTALL_DIR:\$PATH\""
   [ "$(basename "${SHELL:-sh}")" = fish ] && now="fish_add_path $INSTALL_DIR"
   say "To use sonarless-mcp in this terminal now, run:  $now   (new terminals pick it up)"
 fi
 if [ -n "$refresh" ]; then
-  say "If this terminal doesn't recognize sonarless-mcp yet, $refresh"
+  say "If $term doesn't recognize sonarless-mcp yet, $refresh"
 fi
 command -v docker >/dev/null 2>&1 || say "note: Docker not found; sonarless-mcp needs Docker (Docker Desktop on macOS) to run SonarQube."
 
