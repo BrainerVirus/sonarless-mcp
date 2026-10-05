@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        if: runner.os != 'Windows'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - run: go build ./cmd/sonarless-mcp
+
+  # Builds a snapshot release and installs it with the real install scripts,
+  # so install.sh and install.ps1 are exercised on every OS they target.
+  installers:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean --skip=publish
+      - name: install.sh
+        if: runner.os != 'Windows'
+        env:
+          SONARLESS_MCP_BASE_URL: file://${{ github.workspace }}/dist
+          SONARLESS_MCP_INSTALL_DIR: ${{ runner.temp }}/bin
+          SONARLESS_MCP_NO_SETUP: "1"
+        run: |
+          sh install.sh
+          "$SONARLESS_MCP_INSTALL_DIR/sonarless-mcp" --version
+          "$SONARLESS_MCP_INSTALL_DIR/sonarless-mcp" setup --remove --yes
+      - name: install.ps1
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          SONARLESS_MCP_INSTALL_DIR: ${{ runner.temp }}\bin
+          SONARLESS_MCP_NO_SETUP: "1"
+        run: |
+          $env:SONARLESS_MCP_BASE_URL = "file:///$($env:GITHUB_WORKSPACE -replace '\\','/')/dist"
+          ./install.ps1
+          & "$env:SONARLESS_MCP_INSTALL_DIR\sonarless-mcp.exe" --version
+          & "$env:SONARLESS_MCP_INSTALL_DIR\sonarless-mcp.exe" setup --remove --yes

@@ -1,0 +1,173 @@
+# sonarless-mcp
+
+Local SonarQube for any project, built for AI agents: **one** shared SonarQube
+server and **one** shared [SonarQube MCP server](https://github.com/SonarSource/sonarqube-mcp-server)
+per machine, used by every client — Claude Code, Cursor, opencode, VS Code,
+Codex — at once. Single binary for Linux, macOS and Windows.
+
+> **Standing on the shoulders of [gitricko/sonarless](https://github.com/gitricko/sonarless).**
+> sonarless had the great idea: SonarQube without a hosted server, just Docker
+> and one command. sonarless-mcp is a Go rewrite of that idea, reshaped around
+> agents using SonarQube through MCP. If you just want scans in a shell or a
+> GitHub Action, use the original — and give it a ⭐.
+
+## What's different from sonarless
+
+| | sonarless | sonarless-mcp |
+|---|---|---|
+| Runs on | bash + jq + curl (Linux/macOS) | single Go binary (Linux/macOS/Windows) |
+| MCP | — | `sonarless-mcp mcp`: one shared MCP container for all clients, project key filled in per workspace |
+| Project key | directory name | `sonar-project.properties`, `.sonarcloud.properties`, Maven, Gradle (Groovy/Kotlin), `pyproject.toml`, .NET, CI pipelines, `package.json` |
+| Scanner | sonar-scanner CLI | CLI, Maven, Gradle or dotnet-sonarscanner, picked per project |
+| Resources | server runs until stopped | stops itself after 30 min unused, resumes on next use |
+| Server version | fixed in script | `SONARLESS_SONARQUBE_VERSION` in a config file (e.g. to match your CI) |
+| Scan history | lost when the container is recreated | kept in per-version named volumes |
+
+## Install
+
+**Linux / macOS**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.sh | sh
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.ps1 | iex
+```
+
+The installer detects your OS and CPU, downloads the matching release,
+verifies its SHA-256 checksum, installs the binary (`~/.local/bin` or
+`%LOCALAPPDATA%\Programs\sonarless-mcp`, added to your PATH), then opens the
+client picker:
+
+```
+Register the SonarQube MCP server in:
+
+  Select all available
+  Clear all
+
+› [x] Claude Code · detected
+  [x] Cursor · already configured
+  [ ] VS Code · not installed
+  [x] opencode · detected
+  [ ] Codex · not installed
+
+↑/↓ move · space toggle · a all · n none · enter confirm · esc cancel
+```
+
+Installed clients are preselected; untick any you don't want, or clear them
+all. Run it again any time with `sonarless-mcp setup` (`--remove` to
+unregister, `--yes` / `--clients claude,cursor` for scripts). Installer options:
+`SONARLESS_MCP_VERSION=v1.2.3` pins a release, `SONARLESS_MCP_INSTALL_DIR`
+changes the target, `SONARLESS_MCP_NO_SETUP=1` skips the picker.
+
+Or with Go: `go install github.com/BrainerVirus/sonarless-mcp/cmd/sonarless-mcp@latest`.
+
+Requires Docker (Docker Desktop on macOS/Windows).
+
+## Use with AI agents
+
+`sonarless-mcp setup` registers a `sonarqube` MCP server in each client
+(Claude Code via `claude mcp add`, Cursor `~/.cursor/mcp.json`, opencode
+`opencode.json`, VS Code user `mcp.json`, Codex `config.toml`), editing only
+that entry. To do it by hand, `sonarless-mcp mcp-config <client>` prints the
+snippet.
+
+How it works:
+
+```
+Claude Code ─┐                      ┌──────────────────────────┐   ┌──────────────┐
+Cursor ──────┼─ sonarless-mcp mcp ──▶ sonarless-mcp container  ├──▶│ SonarQube    │
+opencode ────┘  (tiny stdio shim,   │ (SonarQube MCP, HTTP,    │   │ (one server) │
+                 one per client)    │  127.0.0.1:9235)         │   └──────────────┘
+                                    └──────────────────────────┘
+```
+
+- Each client runs a few-MB shim instead of its own Java MCP container.
+- The shim starts or resumes the shared containers, keeps one token valid
+  (regenerated under a lock, so clients never revoke each other's), and
+  answers `initialize`/`tools/list` from cache during a cold start so clients
+  don't time out.
+- Tools that take a `projectKey` default to the workspace's project (only when
+  that project exists on the server), and the agent is told which project it is.
+- After `SONARLESS_IDLE_TIMEOUT` (default 30m) without MCP calls, scans or web
+  UI traffic, a background watcher stops both containers. The next request
+  resumes them, history intact.
+
+## Scan from the command line
+
+```sh
+sonarless-mcp scan            # detect, start server, scan, wait for the quality gate
+sonarless-mcp results         # key metrics, saved to sonar-metrics.json
+sonarless-mcp project         # what was detected and where it came from
+sonarless-mcp status | start | stop
+sonarless-mcp reset --yes     # wipe this version's history and start fresh
+```
+
+Scanners: Maven projects use `./mvnw` → `mvn` → a Maven container; Gradle
+projects use `./gradlew` → `gradle` → a Gradle container (the SonarQube plugin is
+applied by an init script if the build doesn't declare it); .NET uses
+`dotnet-sonarscanner`; everything else uses the sonar-scanner CLI container.
+Build-based scans skip tests unless `--tests` (needed for coverage).
+
+## Project key detection
+
+First match wins:
+
+1. `SONARLESS_PROJECT_KEY` (env or `.sonarless.env`)
+2. `sonar-project.properties`, then `.sonarcloud.properties`
+3. explicit build config: `pom.xml` `<properties>`, Gradle `sonar { properties { ... } }` / `gradle.properties`, `package.json` `"sonar"`
+4. `pyproject.toml` `[tool.sonar]`
+5. .NET `SonarQube.Analysis.xml` / `Directory.Build.props`
+6. CI pipelines (GitHub Actions, GitLab CI, Jenkinsfile, Azure Pipelines, Bitbucket, CircleCI): `-Dsonar.projectKey=…`, `/k:…`, `projectKey:` — so local keys match CI
+7. build defaults: Maven `groupId:artifactId`, Gradle `group:rootProject.name`, `.sln` name, `package.json` name
+8. the directory name
+
+The project root is the topmost Maven/Gradle/Sonar root under the git root, so
+running from inside a module scans the whole build.
+
+## Configuration
+
+`sonarless-mcp config` prints every setting and where it came from. Layers, lowest first:
+
+1. built-in defaults
+2. user file: `~/.config/sonarless-mcp/config.env` (Linux), `~/Library/Application Support/sonarless-mcp/config.env` (macOS), `%AppData%\sonarless-mcp\config.env` (Windows)
+3. project file `.sonarless.env` (scan settings only — the server is shared)
+4. environment variables
+
+```sh
+# config.env — match the SonarQube version your CI uses
+SONARLESS_SONARQUBE_VERSION=26.6.0.123539-community
+SONARLESS_IDLE_TIMEOUT=30m
+```
+
+| Setting | Default | |
+|---|---|---|
+| `SONARLESS_SONARQUBE_VERSION` | `26.6.0.123539-community` | `sonarqube` image tag |
+| `SONARLESS_SERVER_PORT` | `9234` | web UI/API port (127.0.0.1) |
+| `SONARLESS_ADMIN_USER` / `SONARLESS_ADMIN_PASS` | `admin` / `admin` | local admin |
+| `SONARLESS_MCP_PORT` / `SONARLESS_MCP_IMAGE` | `9235` / `sonarsource/sonarqube-mcp:latest` | shared MCP server |
+| `SONARLESS_MCP_TOOLSETS` / `SONARLESS_MCP_READ_ONLY` | server defaults / `false` | passed to the MCP server |
+| `SONARLESS_IDLE_TIMEOUT` | `30m` | `0` keeps everything running |
+| `SONARLESS_INSTANCE` | `sonarless` | names the containers (`-server`, `-mcp`), network and volumes |
+| `SONARLESS_PLUGINS_DIR` | `<config dir>/plugins` | extra plugin jars (a `shellcheck` binary there is mounted into CLI scans) |
+| `SONARLESS_PROJECT_KEY` / `SONARLESS_PROJECT_NAME` | detected | per project |
+| `SONARLESS_SCANNER` / `SONARLESS_SCAN_TESTS` | auto / `false` | per project |
+| `SONARLESS_SOURCES` / `SONARLESS_SCANNER_IMAGE` / `SONARLESS_METRICS_FILE` | `.` / `sonarsource/sonar-scanner-cli:12.1` / `sonar-metrics.json` | per project |
+
+### About SonarQube versions
+
+SonarQube's embedded database can't be upgraded across versions, so each
+version keeps its own data volumes: a new version starts with fresh history,
+and switching back restores the old one. `sonarless-mcp reset --yes` wipes the
+current version's history.
+
+## Credits
+
+- [gitricko/sonarless](https://github.com/gitricko/sonarless) — the original
+  idea and CLI this project grew from (MIT).
+- [SonarSource/sonarqube-mcp-server](https://github.com/SonarSource/sonarqube-mcp-server) — the MCP server this shares.
+
+MIT licensed; see [LICENSE](LICENSE).

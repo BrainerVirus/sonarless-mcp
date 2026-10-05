@@ -1,0 +1,5 @@
+/sonarless-mcp
+/sonarless-mcp.exe
+/dist/
+sonar-metrics.json
+.scannerwork/
