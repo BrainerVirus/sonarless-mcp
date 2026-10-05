@@ -14,16 +14,18 @@ import (
 
 // fakeSonar is a minimal in-memory SonarQube for the sync endpoints.
 type fakeSonar struct {
-	mu       sync.Mutex
-	version  string
-	gates    map[string][]condition
-	selected map[string]string // project -> gate
-	profiles []profile
-	assigned map[string]string // lang -> profile name
-	restored []string          // restored backups
-	newCode  map[string]string
-	nextID   int
-	metrics  map[string]bool // metrics the server knows; nil = all
+	mu          sync.Mutex
+	version     string
+	gates       map[string][]condition
+	selected    map[string]string // project -> gate
+	profiles    []profile
+	assigned    map[string]string // lang -> profile name
+	restored    []string          // restored backups
+	newCode     map[string]string
+	nextID      int
+	metrics     map[string]bool // metrics the server knows; nil = all
+	langs       []string        // languages installed; nil = any
+	failRestore map[string]bool
 }
 
 func newFake(version string) *fakeSonar {
@@ -56,12 +58,12 @@ func (f *fakeSonar) handler(t *testing.T) http.Handler {
 		case "/api/qualitygates/create":
 			// Like SonarQube 10+: new gates start with default conditions.
 			f.nextID++
-			f.gates[q.Get("name")] = []condition{{ID: fmt.Sprint(f.nextID), Metric: "coverage", Op: "LT", Error: "80"}}
+			f.gates[q.Get("name")] = []condition{{ID: json.RawMessage(fmt.Sprint(f.nextID)), Metric: "coverage", Op: "LT", Error: "80"}}
 		case "/api/qualitygates/delete_condition":
 			for name, cs := range f.gates {
 				kept := cs[:0]
 				for _, c := range cs {
-					if c.ID != q.Get("id") {
+					if strings.Trim(string(c.ID), `"`) != q.Get("id") {
 						kept = append(kept, c)
 					}
 				}
@@ -80,13 +82,23 @@ func (f *fakeSonar) handler(t *testing.T) http.Handler {
 			}
 			f.nextID++
 			f.gates[q.Get("gateName")] = append(f.gates[q.Get("gateName")],
-				condition{ID: fmt.Sprint(f.nextID), Metric: q.Get("metric"), Op: q.Get("op"), Error: q.Get("error")})
+				condition{ID: json.RawMessage(fmt.Sprint(f.nextID)), Metric: q.Get("metric"), Op: q.Get("op"), Error: q.Get("error")})
 		case "/api/qualitygates/select":
 			f.selected[q.Get("projectKey")] = q.Get("gateName")
 		case "/api/qualityprofiles/search":
 			js(map[string]any{"profiles": f.profiles})
 		case "/api/qualityprofiles/backup":
 			fmt.Fprintf(w, "<?xml version='1.0'?><profile><name>%s</name><language>%s</language><rules/></profile>", q.Get("qualityProfile"), q.Get("language"))
+		case "/api/languages/list":
+			if f.langs == nil {
+				http.NotFound(w, r)
+				return
+			}
+			var ls []map[string]string
+			for _, l := range f.langs {
+				ls = append(ls, map[string]string{"key": l})
+			}
+			js(map[string]any{"languages": ls})
 		case "/api/qualityprofiles/restore":
 			file, _, err := r.FormFile("backup")
 			if err != nil {
@@ -94,6 +106,12 @@ func (f *fakeSonar) handler(t *testing.T) http.Handler {
 				return
 			}
 			b, _ := io.ReadAll(file)
+			for lang := range f.failRestore {
+				if strings.Contains(string(b), "<language>"+lang+"</language>") {
+					http.Error(w, `{"errors":[{"msg":"boom"}]}`, http.StatusBadRequest)
+					return
+				}
+			}
 			f.restored = append(f.restored, string(b))
 			js(map[string]int{"ruleFailures": 2})
 		case "/api/qualityprofiles/add_project":
@@ -111,7 +129,7 @@ func (f *fakeSonar) handler(t *testing.T) http.Handler {
 
 func TestSyncProject(t *testing.T) {
 	remote, local := newFake("26.6"), newFake("26.6")
-	remote.gates["Strict"] = []condition{{ID: "1", Metric: "coverage", Op: "LT", Error: "80"}, {ID: "2", Metric: "plugin_metric", Op: "GT", Error: "0"}}
+	remote.gates["Strict"] = []condition{{ID: json.RawMessage(`"1"`), Metric: "coverage", Op: "LT", Error: "80"}, {ID: json.RawMessage(`"2"`), Metric: "plugin_metric", Op: "GT", Error: "0"}}
 	remote.selected["UI-Kit"] = "Strict"
 	remote.profiles = []profile{
 		{Name: "Sonar way", Language: "ts", IsBuiltIn: true},
@@ -147,7 +165,7 @@ func TestSyncProject(t *testing.T) {
 	}
 
 	// A second sync replaces conditions instead of duplicating them.
-	remote.gates["Strict"] = []condition{{ID: "1", Metric: "coverage", Op: "LT", Error: "70"}}
+	remote.gates["Strict"] = []condition{{ID: json.RawMessage(`"1"`), Metric: "coverage", Op: "LT", Error: "70"}}
 	if _, err := SyncProject(context.Background(), NewToken(rs.URL, "t"), NewAdmin(ls.URL, "admin", "admin"), "UI-Kit", "UI Kit", "work"); err != nil {
 		t.Fatal(err)
 	}
@@ -185,5 +203,35 @@ func TestRenameProfile(t *testing.T) {
 	}
 	if _, err := renameProfile([]byte("<nope/>"), "x"); err == nil {
 		t.Error("accepted non-profile XML")
+	}
+}
+
+func TestSyncContinuesPastFailures(t *testing.T) {
+	remote, local := newFake("26.6"), newFake("26.6")
+	remote.gates["Strict"] = []condition{{ID: json.RawMessage(`3`), Metric: "coverage", Op: "LT", Error: "80"}} // numeric id, as old servers send
+	remote.selected["p"] = "Strict"
+	remote.profiles = []profile{
+		{Name: "Cobol way", Language: "cobol"}, // paid-edition language, missing locally
+		{Name: "Team java", Language: "java"},  // restore fails
+		{Name: "Team web", Language: "web"},    // fine
+	}
+	local.langs = []string{"java", "web"}
+	local.failRestore = map[string]bool{"java": true}
+	rs, ls := httptest.NewServer(remote.handler(t)), httptest.NewServer(local.handler(t))
+	defer rs.Close()
+	defer ls.Close()
+
+	rep, err := SyncProject(context.Background(), NewToken(rs.URL, "t"), NewAdmin(ls.URL, "a", "a"), "p", "p", "work")
+	if err != nil || rep == nil {
+		t.Fatalf("rep=%v err=%v", rep, err)
+	}
+	if rep.Gate != "work: Strict" || local.newCode["p"] == "" {
+		t.Errorf("gate/new code not applied: %+v", rep)
+	}
+	if len(rep.Profiles) != 1 || local.assigned["web"] != "work: Team web" {
+		t.Errorf("web profile not applied after earlier failures: %+v", rep.Profiles)
+	}
+	if len(rep.ProfilesSkip) != 2 || !strings.Contains(strings.Join(rep.ProfilesSkip, "|"), "cobol: language not available") {
+		t.Errorf("skips = %v", rep.ProfilesSkip)
 	}
 }

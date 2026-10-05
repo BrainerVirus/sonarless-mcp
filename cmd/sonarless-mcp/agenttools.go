@@ -224,7 +224,7 @@ func syncText(ctx context.Context, e *env, args map[string]any) (string, bool) {
 		return "Local SonarQube didn't start: " + err.Error(), true
 	}
 	rep, err := sonar.SyncProject(ctx, sonar.NewToken(r.URL, token), e.server.Admin(), e.project.Key, e.project.Name, r.Name)
-	if err != nil {
+	if rep == nil {
 		return fmt.Sprintf("Sync from %s failed: %v", name, err), true
 	}
 	var b strings.Builder
@@ -243,6 +243,13 @@ func syncText(ctx context.Context, e *env, args map[string]any) (string, bool) {
 	}
 	if rep.NewCode != "" {
 		fmt.Fprintf(&b, "new code: %s\n", rep.NewCode)
+	}
+	for _, sk := range rep.ProfilesSkip {
+		fmt.Fprintf(&b, "  rule set not copied: %s\n", sk)
+	}
+	if err != nil {
+		fmt.Fprintf(&b, "Partly applied; problems: %v\n", err)
+		return b.String(), true
 	}
 	b.WriteString("Run sonarless_scan to see the project through these rules.")
 	return b.String(), false

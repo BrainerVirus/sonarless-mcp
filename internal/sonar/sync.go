@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -19,6 +20,7 @@ type SyncReport struct {
 	Gate          string   // local gate name now used by the project ("" if none)
 	GateSkipped   []string // conditions the local server couldn't take (e.g. plugin metrics)
 	Profiles      []string // "lang: local profile name" assigned to the project
+	ProfilesSkip  []string // "lang: reason" — profiles that couldn't be copied
 	ProfilesSame  []string // languages already identical (same built-in profile and version)
 	RuleFailures  []string // "lang: N rules missing locally"
 	NewCode       string   // new-code definition copied ("" if left as is)
@@ -27,10 +29,10 @@ type SyncReport struct {
 }
 
 type condition struct {
-	ID     string `json:"id"`
-	Metric string `json:"metric"`
-	Op     string `json:"op"`
-	Error  string `json:"error"`
+	ID     json.RawMessage `json:"id"` // a string on current servers, a number on old ones
+	Metric string          `json:"metric"`
+	Op     string          `json:"op"`
+	Error  string          `json:"error"`
 }
 
 type gate struct {
@@ -58,16 +60,19 @@ func SyncProject(ctx context.Context, remote, local *Client, project, projectNam
 	if err := local.EnsureProject(ctx, project, projectName); err != nil {
 		return nil, fmt.Errorf("create %q locally: %w", project, err)
 	}
+	// Each part is independent: one failing doesn't stop the others, and the
+	// report always says what was applied.
+	var errs []error
 	if err := syncGate(ctx, remote, local, project, prefix, rep); err != nil {
-		return nil, fmt.Errorf("quality gate: %w", err)
+		errs = append(errs, fmt.Errorf("quality gate: %w", err))
 	}
 	if err := syncProfiles(ctx, remote, local, project, prefix, rep); err != nil {
-		return nil, fmt.Errorf("quality profiles: %w", err)
+		errs = append(errs, fmt.Errorf("quality profiles: %w", err))
 	}
 	if err := syncNewCode(ctx, remote, local, project, rep); err != nil {
-		return nil, fmt.Errorf("new code definition: %w", err)
+		errs = append(errs, fmt.Errorf("new code definition: %w", err))
 	}
-	return rep, nil
+	return rep, errors.Join(errs...)
 }
 
 func version(ctx context.Context, c *Client) string {
@@ -102,7 +107,7 @@ func syncGate(ctx context.Context, remote, local *Client, project, prefix string
 	}
 	// Replace the conditions so the copy matches the remote exactly.
 	for _, c := range dst.Conditions {
-		if err := local.Do(ctx, http.MethodPost, "/api/qualitygates/delete_condition", url.Values{"id": {c.ID}}, nil); err != nil {
+		if err := local.Do(ctx, http.MethodPost, "/api/qualitygates/delete_condition", url.Values{"id": {strings.Trim(string(c.ID), `"`)}}, nil); err != nil {
 			return err
 		}
 	}
@@ -133,8 +138,21 @@ func syncProfiles(ctx context.Context, remote, local *Client, project, prefix st
 	for _, p := range lp.Profiles {
 		localByLang[p.Language] = p
 	}
+	var langs struct {
+		Languages []struct{ Key string } `json:"languages"`
+	}
+	localLangs := map[string]bool{}
+	if local.Do(ctx, http.MethodGet, "/api/languages/list", url.Values{"ps": {"0"}}, &langs) == nil {
+		for _, l := range langs.Languages {
+			localLangs[l.Key] = true
+		}
+	}
 	sameVersion := rep.RemoteVersion != "" && rep.RemoteVersion == rep.LocalVersion
 	for _, p := range rp.Profiles {
+		if len(localLangs) > 0 && !localLangs[p.Language] {
+			rep.ProfilesSkip = append(rep.ProfilesSkip, p.Language+": language not available on the local server (edition/plugin)")
+			continue
+		}
 		// A built-in profile is identical on servers of the same version.
 		if p.IsBuiltIn && sameVersion {
 			if l, ok := localByLang[p.Language]; ok && l.IsBuiltIn && l.Name == p.Name {
@@ -142,29 +160,33 @@ func syncProfiles(ctx context.Context, remote, local *Client, project, prefix st
 				continue
 			}
 		}
-		backup, err := remote.raw(ctx, "/api/qualityprofiles/backup", url.Values{"language": {p.Language}, "qualityProfile": {p.Name}})
-		if err != nil {
-			return fmt.Errorf("back up %s profile %q: %w", p.Language, p.Name, err)
-		}
 		name := prefix + ": " + p.Name
-		backup, err = renameProfile(backup, name)
-		if err != nil {
-			return err
-		}
-		failures, err := local.restoreProfile(ctx, backup)
-		if err != nil {
-			return fmt.Errorf("restore %s profile %q locally: %w", p.Language, name, err)
-		}
-		if failures > 0 {
-			rep.RuleFailures = append(rep.RuleFailures, fmt.Sprintf("%s: %d rules not available locally", p.Language, failures))
-		}
-		if err := local.Do(ctx, http.MethodPost, "/api/qualityprofiles/add_project", url.Values{
-			"language": {p.Language}, "qualityProfile": {name}, "project": {project}}, nil); err != nil {
-			return err
+		if err := copyProfile(ctx, remote, local, p, name, project, rep); err != nil {
+			rep.ProfilesSkip = append(rep.ProfilesSkip, fmt.Sprintf("%s: %v", p.Language, err))
+			continue
 		}
 		rep.Profiles = append(rep.Profiles, p.Language+": "+name)
 	}
 	return nil
+}
+
+func copyProfile(ctx context.Context, remote, local *Client, p profile, name, project string, rep *SyncReport) error {
+	backup, err := remote.raw(ctx, "/api/qualityprofiles/backup", url.Values{"language": {p.Language}, "qualityProfile": {p.Name}})
+	if err != nil {
+		return fmt.Errorf("back up %q: %w", p.Name, err)
+	}
+	if backup, err = renameProfile(backup, name); err != nil {
+		return err
+	}
+	failures, err := local.restoreProfile(ctx, backup)
+	if err != nil {
+		return fmt.Errorf("restore %q: %w", name, err)
+	}
+	if failures > 0 {
+		rep.RuleFailures = append(rep.RuleFailures, fmt.Sprintf("%s: %d rules not available locally", p.Language, failures))
+	}
+	return local.Do(ctx, http.MethodPost, "/api/qualityprofiles/add_project", url.Values{
+		"language": {p.Language}, "qualityProfile": {name}, "project": {project}}, nil)
 }
 
 var profileName = regexp.MustCompile(`(?s)(<profile>\s*<name>)(.*?)(</name>)`)
