@@ -50,21 +50,36 @@ try {
     Expand-Archive -Path $zip -DestinationPath (Join-Path $tmp 'x') -Force
     New-Item -ItemType Directory -Force -Path $installDir | Out-Null
     $exe = Join-Path $installDir 'sonarless-mcp.exe'
-    # A running exe can't be overwritten on Windows but can be renamed aside.
+    # A running exe can't be overwritten on Windows but can be renamed aside;
+    # if the old copy is itself still running, pick a fresh name.
+    $old = $null
     if (Test-Path $exe) {
         $old = "$exe.old"
         Remove-Item $old -Force -ErrorAction SilentlyContinue
+        if (Test-Path $old) { $old = "$exe.old-$([DateTime]::UtcNow.Ticks)" }
         Rename-Item $exe (Split-Path $old -Leaf)
     }
-    Copy-Item (Join-Path $tmp 'x\sonarless-mcp.exe') $exe
+    try {
+        Copy-Item (Join-Path $tmp 'x\sonarless-mcp.exe') $exe -ErrorAction Stop
+    } catch {
+        if ($old) { Rename-Item $old (Split-Path $exe -Leaf) }  # put the previous version back
+        throw
+    }
     Write-Host "Installed $(& $exe --version) to $exe"
 
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    # Edit the user PATH in the registry as stored (REG_EXPAND_SZ, %VARS%
+    # unexpanded): [Environment]::GetEnvironmentVariable would expand them.
+    $envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    $userPath = [string]$envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
     if (($userPath -split ';') -notcontains $installDir) {
-        [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ";$installDir").TrimStart(';'), 'User')
+        $envKey.SetValue('Path', ($userPath.TrimEnd(';') + ";$installDir").TrimStart(';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+        # Let Explorer and new terminals know (a no-op variable change broadcasts WM_SETTINGCHANGE).
+        [Environment]::SetEnvironmentVariable('SONARLESS_MCP_PATH_REFRESH', '1', 'User')
+        [Environment]::SetEnvironmentVariable('SONARLESS_MCP_PATH_REFRESH', $null, 'User')
         $env:Path += ";$installDir"
         Write-Host "Added $installDir to your user PATH (new terminals pick it up)."
     }
+    $envKey.Close()
     if ($env:TERM_PROGRAM -eq 'WarpTerminal') {
         Write-Host 'If Warp underlines sonarless-mcp as unknown, open a new tab (Warp reads PATH only when a tab starts; the command already works here).'
     }

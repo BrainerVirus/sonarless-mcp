@@ -68,6 +68,7 @@ say "Checksum OK."
 
 tar -xzf "$tmp/$asset" -C "$tmp" sonarless-mcp
 mkdir -p "$INSTALL_DIR"
+[ -d "$INSTALL_DIR/sonarless-mcp" ] && die "$INSTALL_DIR/sonarless-mcp is a directory; move it away and rerun"
 # Replace via rename so a running copy (an MCP client using it) isn't disturbed.
 cp "$tmp/sonarless-mcp" "$INSTALL_DIR/.sonarless-mcp.new"
 chmod 755 "$INSTALL_DIR/.sonarless-mcp.new"
@@ -148,6 +149,7 @@ command -v docker >/dev/null 2>&1 || say "note: Docker not found; sonarless-mcp 
 
 [ "${SONARLESS_MCP_NO_SETUP:-}" = 1 ] && exit 0
 say ""
+rm -rf "$tmp" # exec below replaces this shell, so the EXIT trap won't run
 if [ "$#" -gt 0 ]; then
   exec "$INSTALL_DIR/sonarless-mcp" setup "$@"
 elif [ -t 1 ] && (: </dev/tty) 2>/dev/null; then

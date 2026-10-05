@@ -155,7 +155,11 @@ func install(ctx context.Context, tag, exe string) error {
 	// A running Windows exe can't be replaced but can be renamed aside; the
 	// same dance is harmless elsewhere and keeps one rollback copy.
 	old := exe + ".old"
-	_ = os.Remove(old)
+	if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+		// Still running from the previous update (Windows locks it): use a
+		// fresh name rather than failing every daily update until it exits.
+		old = fmt.Sprintf("%s.old-%d", exe, time.Now().UnixNano())
+	}
 	if err := os.Rename(exe, old); err != nil {
 		return fmt.Errorf("move current binary aside: %w", err)
 	}

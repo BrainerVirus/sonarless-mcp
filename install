@@ -27,13 +27,14 @@ case "$(uname -s 2>/dev/null)" in
       exec powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm '$base/install.ps1' | iex"
     fi ;;
 esac
+script="$(mktemp "${TMPDIR:-/tmp}/sonarless-mcp-install.XXXXXX")"
+trap 'rm -f "$script"' EXIT
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL "$base/install.sh" -o "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh"
+  curl -fsSL "$base/install.sh" -o "$script"
 else
-  wget -qO "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh" "$base/install.sh"
+  wget -qO "$script" "$base/install.sh"
 fi
-trap 'rm -f "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh"' EXIT
-sh "${TMPDIR:-/tmp}/sonarless-mcp-install.$$.sh" "$@"
+sh "$script" "$@"
 exit $?
 #>
 
