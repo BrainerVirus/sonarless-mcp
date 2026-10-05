@@ -78,7 +78,7 @@ func shimBackends(e *env) ([]*mcp.Backend, error) {
 			Token: func(ctx context.Context, force bool) (string, error) {
 				t, err := remote.Token(e.cfg, r.Name)
 				if err == nil && force && !sonar.NewToken(r.URL, t).Valid(ctx) {
-					return "", fmt.Errorf("token rejected by %s; update it with `sonarless-mcp remote add %s --url %s`", r.URL, r.Name, r.URL)
+					return "", fmt.Errorf("token rejected by %s; update it with `sonarless-mcp remote update %s --token`", r.URL, r.Name)
 				}
 				return t, err
 			},
@@ -111,6 +111,11 @@ file (never in remotes.json).`,
 			if err != nil {
 				return err
 			}
+			if _, exists, err := remote.Get(e.cfg, args[0]); err != nil {
+				return err
+			} else if exists {
+				return fmt.Errorf("remote %q already exists; change it with `sonarless-mcp remote update %s --url ... / --token / --branch ...`", args[0], args[0])
+			}
 			token, err := readToken(cmd.Context(), tokenStdin)
 			if err != nil {
 				return err
@@ -122,6 +127,60 @@ file (never in remotes.json).`,
 	add.Flags().StringVar(&branch, "branch", "", "default branch for tools that take one (e.g. develop)")
 	add.Flags().BoolVar(&tokenStdin, "token-stdin", false, "read the token from stdin")
 	_ = add.MarkFlagRequired("url")
+
+	var upURL, upBranch string
+	var upToken, upTokenStdin bool
+	update := &cobra.Command{
+		Use:   "update <name> [--url <url>] [--branch <branch>] [--token]",
+		Short: "Change a remote's URL, branch and/or token, keeping everything else",
+		Long: `Change only what you pass: --url (e.g. the server moved), --branch, and/or
+--token (asks for the new token with hidden input; --token-stdin or
+$SONARLESS_REMOTE_TOKEN also work). A changed URL or token is verified against
+the server; if it's unreachable (VPN down) the change is saved with a warning.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			e, err := load("", false)
+			if err != nil {
+				return err
+			}
+			r, exists, err := remote.Get(e.cfg, args[0])
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return fmt.Errorf("no remote named %q; add it with `sonarless-mcp remote add %s --url ...`", args[0], args[0])
+			}
+			changed := false
+			if cmd.Flags().Changed("url") {
+				r.URL, changed = upURL, true
+			}
+			if cmd.Flags().Changed("branch") {
+				r.Branch, changed = upBranch, true
+			}
+			var token string
+			if upToken || upTokenStdin {
+				if token, err = readToken(cmd.Context(), upTokenStdin); err != nil {
+					return err
+				}
+				changed = true
+			} else if token, err = remote.Token(e.cfg, r.Name); err != nil {
+				return err
+			}
+			if !changed {
+				return errors.New("nothing to update: pass --url, --branch and/or --token")
+			}
+			if err := addRemote(cmd.Context(), e.cfg, r, token); err != nil {
+				return err
+			}
+			// The remote's MCP container points at the old URL; it is recreated
+			// on next use (its spec includes the URL).
+			return nil
+		},
+	}
+	update.Flags().StringVar(&upURL, "url", "", "new SonarQube URL")
+	update.Flags().StringVar(&upBranch, "branch", "", "new default branch (\"\" for the server's main branch)")
+	update.Flags().BoolVar(&upToken, "token", false, "replace the token (hidden prompt)")
+	update.Flags().BoolVar(&upTokenStdin, "token-stdin", false, "replace the token, read from stdin")
 
 	list := &cobra.Command{
 		Use:   "list",
@@ -214,7 +273,7 @@ as is.`,
 	}
 	imp.Flags().StringVar(&importBranch, "branch", "", "default branch for tools that take one (e.g. develop)")
 
-	cmd.AddCommand(add, list, remove, imp)
+	cmd.AddCommand(add, update, list, remove, imp)
 	return cmd
 }
 
@@ -235,6 +294,7 @@ func addRemote(ctx context.Context, cfg *config.Config, r remote.Remote, token s
 	if reachable && !c.Valid(ctx) {
 		return fmt.Errorf("%s rejected the token", r.URL)
 	}
+	_, existed, _ := remote.Get(cfg, r.Name)
 	saved, err := remote.Add(cfg, r, token)
 	if err != nil {
 		return err
@@ -242,7 +302,11 @@ func addRemote(ctx context.Context, cfg *config.Config, r remote.Remote, token s
 	if !reachable {
 		fmt.Printf("warning: %s is unreachable right now (VPN or network down?); saved without verifying the token.\n", r.URL)
 	}
-	fmt.Printf("Added remote %q (%s", saved.Name, saved.URL)
+	verb := "Added"
+	if existed {
+		verb = "Updated"
+	}
+	fmt.Printf("%s remote %q (%s", verb, saved.Name, saved.URL)
 	if saved.Branch != "" {
 		fmt.Printf(", branch %s", saved.Branch)
 	}

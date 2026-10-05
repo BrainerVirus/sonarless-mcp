@@ -140,7 +140,21 @@ func Remove(cfg *config.Config, name string) error {
 func Token(cfg *config.Config, name string) (string, error) {
 	b, err := os.ReadFile(TokenFile(cfg, name))
 	if err != nil {
-		return "", fmt.Errorf("no token for remote %q (run `sonarless-mcp remote add %s ...`): %w", name, name, err)
+		return "", fmt.Errorf("no token for remote %q (set it with `sonarless-mcp remote update %s --token`): %w", name, name, err)
 	}
 	return strings.TrimSpace(string(b)), nil
+}
+
+// Get returns one remote by name.
+func Get(cfg *config.Config, name string) (Remote, bool, error) {
+	rs, err := Load(cfg)
+	if err != nil {
+		return Remote{}, false, err
+	}
+	for _, r := range rs {
+		if r.Name == name {
+			return r, true, nil
+		}
+	}
+	return Remote{}, false, nil
 }
