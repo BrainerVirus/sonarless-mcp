@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.3.3](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.2...v0.3.3) (2026-10-05)
+
+### Bug Fixes
+
+* **install:** give the right refresh hint for the terminal in use ([df1ca38](https://github.com/BrainerVirus/sonarless-mcp/commit/df1ca3871773e1de18156e4b03a18da63555fc71))
+
 ## [0.3.2](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.1...v0.3.2) (2026-10-05)
 
 ### Bug Fixes
