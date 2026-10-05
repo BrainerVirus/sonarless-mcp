@@ -85,3 +85,18 @@ func TestBadPort(t *testing.T) {
 		t.Error("bad port accepted")
 	}
 }
+
+func TestEnvFileQuirks(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "config.env")
+	_ = os.WriteFile(f, []byte("\ufeffSONARLESS_ADMIN_USER=bob\r\nSONARLESS_ADMIN_PASS=\"s3c#ret\" # local only\nSONARLESS_INSTANCE='x y' \nSONARLESS_SOURCES=src # main code\n"), 0o644)
+	v, err := ReadEnvFile(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"SONARLESS_ADMIN_USER": "bob", "SONARLESS_ADMIN_PASS": "s3c#ret", "SONARLESS_INSTANCE": "x y", "SONARLESS_SOURCES": "src"}
+	for k, w := range want {
+		if v[k] != w {
+			t.Errorf("%s = %q, want %q", k, v[k], w)
+		}
+	}
+}

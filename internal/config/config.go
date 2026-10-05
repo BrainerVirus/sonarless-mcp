@@ -278,7 +278,7 @@ func ReadEnvFile(path string) (map[string]string, error) {
 	vals := map[string]string{}
 	sc := bufio.NewScanner(f)
 	for line := 1; sc.Scan(); line++ {
-		s := strings.TrimSpace(sc.Text())
+		s := strings.TrimSpace(strings.TrimPrefix(sc.Text(), "\ufeff")) // BOM from Windows editors
 		if s == "" || strings.HasPrefix(s, "#") {
 			continue
 		}
@@ -288,8 +288,12 @@ func ReadEnvFile(path string) (map[string]string, error) {
 			return nil, fmt.Errorf("%s:%d: expected KEY=VALUE", path, line)
 		}
 		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
-		if len(v) >= 2 && (v[0] == '"' && v[len(v)-1] == '"' || v[0] == '\'' && v[len(v)-1] == '\'') {
-			v = v[1 : len(v)-1]
+		if len(v) > 0 && (v[0] == '"' || v[0] == '\'') {
+			// Quoted: the value ends at the matching quote; anything after
+			// (e.g. "# comment") is ignored, and # inside quotes is kept.
+			if end := strings.IndexByte(v[1:], v[0]); end >= 0 {
+				v = v[1 : end+1]
+			}
 		} else if i := strings.Index(v, " #"); i >= 0 {
 			v = strings.TrimSpace(v[:i])
 		}
