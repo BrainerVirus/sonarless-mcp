@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.5.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.4.0...v0.5.0) (2026-10-05)
+
+### Features
+
+* **agents:** expose sonarless tools over MCP and install an agent skill ([48b1c25](https://github.com/BrainerVirus/sonarless-mcp/commit/48b1c2502d541fc3238f4219e66a53fd140122fd))
+
 ## [0.4.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.6...v0.4.0) (2026-10-05)
 
 ### Features
