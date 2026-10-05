@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.4.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.6...v0.4.0) (2026-10-05)
+
+### Features
+
+* **remote:** sync a project's quality gate, rule sets and new code from a remote ([3add001](https://github.com/BrainerVirus/sonarless-mcp/commit/3add001e84c76547153c04b9dc50d4e48c2106c6))
+
 ## [0.3.6](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.3.5...v0.3.6) (2026-10-05)
 
 ### Bug Fixes
