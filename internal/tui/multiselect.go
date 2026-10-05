@@ -4,6 +4,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -18,14 +19,29 @@ type Option struct {
 	Selected  bool
 }
 
+// styles are built on first use, not at package init: creating lipgloss
+// styles makes it query the terminal (background color, cursor position),
+// which every sonarless-mcp command would otherwise pay for at startup.
+type styles struct{ title, cursor, checked, dim, tagOK, tagCfg lipgloss.Style }
+
 var (
-	title   = lipgloss.NewStyle().Bold(true)
-	cursorS = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
-	checked = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	dim     = lipgloss.NewStyle().Faint(true)
-	tagOK   = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	tagCfg  = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	stylesOnce sync.Once
+	st         styles
 )
+
+func getStyles() styles {
+	stylesOnce.Do(func() {
+		st = styles{
+			title:   lipgloss.NewStyle().Bold(true),
+			cursor:  lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true),
+			checked: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+			dim:     lipgloss.NewStyle().Faint(true),
+			tagOK:   lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+			tagCfg:  lipgloss.NewStyle().Foreground(lipgloss.Color("14")),
+		}
+	})
+	return st
+}
 
 const (
 	rowAll  = -2
@@ -96,11 +112,12 @@ func (m model) View() string {
 	if m.done || m.aborted {
 		return ""
 	}
+	st := getStyles()
 	var b strings.Builder
-	b.WriteString(title.Render(m.heading) + "\n\n")
+	b.WriteString(st.title.Render(m.heading) + "\n\n")
 	line := func(i int, text string) {
 		if i == m.cursor {
-			b.WriteString(cursorS.Render("› ") + text + "\n")
+			b.WriteString(st.cursor.Render("› ") + text + "\n")
 		} else {
 			b.WriteString("  " + text + "\n")
 		}
@@ -111,18 +128,18 @@ func (m model) View() string {
 	for i, o := range m.opts {
 		box := "[ ]"
 		if o.Selected {
-			box = checked.Render("[x]")
+			box = st.checked.Render("[x]")
 		}
-		tag := dim.Render(" · " + o.Tag)
+		tag := st.dim.Render(" · " + o.Tag)
 		switch o.Tag {
 		case "detected":
-			tag = tagOK.Render(" · detected")
+			tag = st.tagOK.Render(" · detected")
 		case "already configured":
-			tag = tagCfg.Render(" · already configured")
+			tag = st.tagCfg.Render(" · already configured")
 		}
 		line(i+2, fmt.Sprintf("%s %s%s", box, o.Label, tag))
 	}
-	b.WriteString("\n" + dim.Render("↑/↓ move · space toggle · a all · n none · enter confirm · esc cancel") + "\n")
+	b.WriteString("\n" + st.dim.Render("↑/↓ move · space toggle · a all · n none · enter confirm · esc cancel") + "\n")
 	return b.String()
 }
 

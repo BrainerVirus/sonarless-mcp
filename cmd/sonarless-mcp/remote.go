@@ -111,7 +111,7 @@ file (never in remotes.json).`,
 			if err != nil {
 				return err
 			}
-			token, err := readToken(tokenStdin)
+			token, err := readToken(cmd.Context(), tokenStdin)
 			if err != nil {
 				return err
 			}
@@ -205,7 +205,11 @@ as is.`,
 			}
 			f := found[0]
 			fmt.Printf("Found %s in %s (%s)\n", f.URL, f.Client, f.File)
-			return addRemote(cmd.Context(), e.cfg, remote.Remote{Name: args[0], URL: f.URL, Branch: importBranch}, f.Token)
+			token, err := validToken(f.Token)
+			if err != nil {
+				return err
+			}
+			return addRemote(cmd.Context(), e.cfg, remote.Remote{Name: args[0], URL: f.URL, Branch: importBranch}, token)
 		},
 	}
 	imp.Flags().StringVar(&importBranch, "branch", "", "default branch for tools that take one (e.g. develop)")
@@ -220,6 +224,9 @@ func addRemote(ctx context.Context, cfg *config.Config, r remote.Remote, token s
 	c := sonar.NewToken(strings.TrimRight(r.URL, "/"), token)
 	reachable := true
 	if _, err := c.Status(ctx); err != nil {
+		if ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
+			return errors.New("cancelled; nothing was saved")
+		}
 		var apiErr *sonar.APIError
 		if !errors.As(err, &apiErr) {
 			reachable = false // offline or VPN down: save now, verify on first use
@@ -243,18 +250,65 @@ func addRemote(ctx context.Context, cfg *config.Config, r remote.Remote, token s
 	return nil
 }
 
-func readToken(stdin bool) (string, error) {
+// readToken gets a token from stdin, $SONARLESS_REMOTE_TOKEN or a hidden
+// prompt. Ctrl+C at the prompt cancels cleanly: the terminal's echo is
+// restored and nothing is saved.
+func readToken(ctx context.Context, stdin bool) (string, error) {
+	var tok string
 	switch {
 	case stdin:
 		b, err := io.ReadAll(bufio.NewReader(os.Stdin))
-		return strings.TrimSpace(string(b)), err
+		if err != nil {
+			return "", err
+		}
+		tok = string(b)
 	case os.Getenv("SONARLESS_REMOTE_TOKEN") != "":
-		return os.Getenv("SONARLESS_REMOTE_TOKEN"), nil
+		tok = os.Getenv("SONARLESS_REMOTE_TOKEN")
 	case term.IsTerminal(int(os.Stdin.Fd())):
-		fmt.Fprint(os.Stderr, "SonarQube token (input hidden): ")
-		b, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Fprintln(os.Stderr)
-		return strings.TrimSpace(string(b)), err
+		fd := int(os.Stdin.Fd())
+		state, err := term.GetState(fd)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprint(os.Stderr, "SonarQube token (input hidden, Ctrl+C to cancel): ")
+		type result struct {
+			b   []byte
+			err error
+		}
+		done := make(chan result, 1)
+		go func() { b, err := term.ReadPassword(fd); done <- result{b, err} }()
+		select {
+		case r := <-done:
+			fmt.Fprintln(os.Stderr)
+			if r.err != nil {
+				return "", r.err
+			}
+			tok = string(r.b)
+		case <-ctx.Done(): // our signal handler swallowed Ctrl+C; the read is still pending
+			_ = term.Restore(fd, state)
+			fmt.Fprintln(os.Stderr)
+			return "", errors.New("cancelled; nothing was saved")
+		}
+	default:
+		return "", errors.New("no token: use --token-stdin, $SONARLESS_REMOTE_TOKEN or run in a terminal")
 	}
-	return "", errors.New("no token: use --token-stdin, $SONARLESS_REMOTE_TOKEN or run in a terminal")
+	return validToken(tok)
+}
+
+// validToken rejects empty or mangled input (whitespace, control
+// characters, too short) before anything is saved.
+func validToken(t string) (string, error) {
+	t = strings.TrimSpace(t)
+	if t == "" {
+		return "", errors.New("empty token; nothing was saved")
+	}
+	for _, r := range t {
+		if r <= ' ' || r == 0x7f {
+			return "", errors.New("token contains spaces or control characters; nothing was saved")
+		}
+	}
+	if len(t) < 16 {
+		return "", fmt.Errorf("token is too short (%d characters) to be a SonarQube token; nothing was saved", len(t))
+	}
+	return t, nil
 }
