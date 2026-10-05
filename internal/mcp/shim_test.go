@@ -29,6 +29,8 @@ const toolsList = `{"tools":[
 func newTestShim(t *testing.T) *Shim {
 	t.Helper()
 	t.Setenv("SONARLESS_HOME", t.TempDir())
+	// No idle watcher: it spawns os.Executable() — the test binary here.
+	t.Setenv("SONARLESS_IDLE_TIMEOUT", "0")
 	cfg, _, err := config.Load("")
 	if err != nil {
 		t.Fatal(err)

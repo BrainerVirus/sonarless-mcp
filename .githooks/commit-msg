@@ -5,7 +5,9 @@ subject=$(head -n 1 "$1")
 case "$subject" in
   Merge\ * | Revert\ * | fixup!* | squash!*) exit 0 ;;
 esac
-if printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: [^ ].*'; then
+# Same rules as CI's commitlint: known type, and a subject that doesn't start
+# with a capital letter (e.g. "fix: windows-safe updates", not "Windows-safe").
+if printf '%s\n' "$subject" | grep -Eq '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: [^ A-Z].*'; then
   exit 0
 fi
 cat >&2 <<EOF
