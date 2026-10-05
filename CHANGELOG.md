@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.2.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.2.0...v0.2.1) (2026-10-05)
+
+### Bug Fixes
+
+* **remote:** make the token prompt cancellable and validate tokens ([33326cc](https://github.com/BrainerVirus/sonarless-mcp/commit/33326ccddd72adf338bd7d87f69151caa09cab66))
+
 ## [0.2.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.1.0...v0.2.0) (2026-10-05)
 
 ### Features
