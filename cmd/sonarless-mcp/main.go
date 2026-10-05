@@ -54,7 +54,7 @@ func load(dir string, withProject bool) (*env, error) {
 	}
 	e.cfg = cfg
 	e.server = &sonar.Server{Cfg: cfg, Log: os.Stderr}
-	e.mcp = &mcp.Container{Cfg: cfg, Log: os.Stderr}
+	e.mcp = mcp.NewLocal(cfg, os.Stderr)
 	if withProject {
 		p := project.Detect(root)
 		if k := cfg.Get(config.ProjectKey); k != "" {
@@ -156,15 +156,19 @@ func main() {
 			if err := docker.Available(ctx); err != nil {
 				return err
 			}
-			for _, c := range []struct{ label, name, url string }{
+			rows := []struct{ label, name, url string }{
 				{"server", e.cfg.ServerContainer(), e.cfg.ServerURL()},
 				{"mcp", e.cfg.MCPContainer(), e.cfg.MCPURL()},
-			} {
+			}
+			for _, c := range remoteContainers(e) {
+				rows = append(rows, struct{ label, name, url string }{"remote", c.Name, c.SonarURL})
+			}
+			for _, c := range rows {
 				state := "absent"
 				if ct, err := docker.Inspect(ctx, c.name); err == nil {
 					state = ct.Status + " (" + ct.Image + ")"
 				}
-				fmt.Printf("%-7s %-14s %-48s %s\n", c.label, c.name, state, c.url)
+				fmt.Printf("%-7s %-20s %-48s %s\n", c.label, c.name, state, c.url)
 			}
 			timeout, _ := e.cfg.IdleTimeout()
 			if timeout == 0 {
@@ -293,7 +297,11 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 			}
 			e.server.Log, e.mcp.Log = os.Stderr, os.Stderr // stdout is the protocol
 			autoUpdate(e.cfg)
-			shim := &mcp.Shim{Cfg: e.cfg, Server: e.server, MCP: e.mcp, Project: e.project, Log: os.Stderr}
+			backends, err := shimBackends(e)
+			if err != nil {
+				return err
+			}
+			shim := &mcp.Shim{Cfg: e.cfg, Backends: backends, Project: e.project, Log: os.Stderr}
 			return shim.Run(ctx, os.Stdin, os.Stdout)
 		},
 	}
@@ -323,6 +331,7 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 
 	root.AddCommand(setupCommand())
 	root.AddCommand(updateCommand())
+	root.AddCommand(remoteCommand())
 
 	root.AddCommand(&cobra.Command{
 		Use:    "daemon",
@@ -334,6 +343,9 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 				return err
 			}
 			names := []string{e.cfg.ServerContainer(), e.cfg.MCPContainer()}
+			for _, c := range remoteContainers(e) {
+				names = append(names, c.Name)
+			}
 			return idle.Watch(ctx, e.cfg, names, func(ctx context.Context) error { return stopAll(ctx, e) }, os.Stderr)
 		},
 	})
@@ -345,7 +357,11 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 }
 
 func stopAll(ctx context.Context, e *env) error {
-	return errors.Join(e.mcp.Stop(ctx), e.server.Stop(ctx))
+	errs := []error{e.mcp.Stop(ctx), e.server.Stop(ctx)}
+	for _, c := range remoteContainers(e) {
+		errs = append(errs, c.Stop(ctx))
+	}
+	return errors.Join(errs...)
 }
 
 func printMeasures(m map[string]any) {

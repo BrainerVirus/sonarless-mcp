@@ -191,3 +191,19 @@ func TestCodexForeignEntryIsKept(t *testing.T) {
 		t.Errorf("after remove:\n%s", b)
 	}
 }
+
+func TestFindSonarQubeCredentials(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", "")
+	env := Env{Home: home, GOOS: "linux"}
+	f := filepath.Join(home, ".config", "Code", "User", "mcp.json")
+	_ = os.MkdirAll(filepath.Dir(f), 0o755)
+	_ = os.WriteFile(f, []byte(`{"servers":{
+	  "sonarqube":{"command":"docker","env":{"SONARQUBE_URL":"https://sonar.example.com","SONARQUBE_TOKEN":"squ_x"}},
+	  "templated":{"command":"docker","env":{"SONARQUBE_URL":"https://y","SONARQUBE_TOKEN":"${input:token}"}},
+	  "sonarqube-local":{"command":"/bin/sonarless-mcp","env":{"SONARQUBE_URL":"https://z","SONARQUBE_TOKEN":"t"}}}}`), 0o644)
+	got := FindSonarQubeCredentials(env)
+	if len(got) != 1 || got[0].URL != "https://sonar.example.com" || got[0].Token != "squ_x" || got[0].Client != "VS Code" {
+		t.Errorf("got %+v", got)
+	}
+}

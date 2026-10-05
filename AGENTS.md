@@ -20,11 +20,12 @@ in the README and LICENSE.
 | `internal/config/` | layered settings: defaults < user `config.env` < project `.sonarless.env` < env |
 | `internal/docker/` | thin `docker` CLI wrapper (no SDK) |
 | `internal/sonar/` | SonarQube API client, server container lifecycle, shared token, file locks |
-| `internal/mcp/` | shared MCP container + the stdio shim (proxy, cache, projectKey injection) |
+| `internal/mcp/` | shared MCP containers + the stdio shim (proxy, cache, per-server routing and defaults) |
 | `internal/project/` | project root + key detection from every config source |
 | `internal/scan/` | cli / maven / gradle / dotnet scanners |
 | `internal/idle/` | activity stamp, idle watcher, detached process spawning |
 | `internal/update/` | release check, checksum-verified self-replace |
+| `internal/remote/` | remote SonarQube servers (remotes.json + private token files) |
 | `internal/clients/` | AI client detection and config editing |
 | `internal/tui/` | the setup picker (bubbletea) |
 | `install.sh`, `install.ps1` | one-line installers |

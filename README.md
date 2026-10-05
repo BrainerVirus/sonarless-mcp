@@ -127,6 +127,35 @@ opencode ────┘  (tiny stdio shim,   │ (SonarQube MCP, HTTP,    │  
   UI traffic, a background watcher stops both containers. The next request
   resumes them, history intact.
 
+## Remote SonarQube servers
+
+Next to the local server you can add any number of remote ones — typically your
+company's CI server — and ask the agent about either:
+
+```sh
+sonarless-mcp remote add work --url http://sonar.internal:9000 --branch develop   # token: hidden prompt
+sonarless-mcp remote list        # name, reachable/unreachable, url, default branch
+sonarless-mcp remote import work --branch develop   # reuse a SonarQube MCP entry another client already has
+sonarless-mcp remote remove work
+```
+
+Every MCP tool then takes an optional `server` argument: `local` (default — your
+working copy, scanned in real time) or a remote's name (what CI found, e.g. on
+`develop`). The workspace's project key and the remote's branch are filled in.
+
+Remotes are built to stay out of the way:
+
+- Nothing touches a remote unless a tool call asks for it: startup, `initialize`
+  and the tool list only use the local server.
+- Before a remote call, a 3-second reachability check (cached 30s) runs; if the
+  server is down or you're off the VPN, the agent gets a clear tool error and
+  keeps using the local server. Reconnect and the next call works.
+- A remote's MCP container only starts on its first successful use and stops
+  with the rest when idle, so configured-but-unused remotes cost nothing.
+- Tokens are stored per remote in a private file (`remotes/<name>.token`, 0600),
+  never in `remotes.json`; a remote can be added while offline and is verified
+  on first use.
+
 ## Scan from the command line
 
 ```sh

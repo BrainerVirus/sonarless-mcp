@@ -576,3 +576,59 @@ func writeFile(file string, b []byte) error {
 	}
 	return os.Rename(tmp, file)
 }
+
+// Credentials is a SonarQube URL + token found in an AI client's config.
+type Credentials struct {
+	Client, File, URL, Token string
+}
+
+// FindSonarQubeCredentials scans the JSON-configured clients for MCP entries
+// that aren't sonarless-mcp but carry SONARQUBE_URL and SONARQUBE_TOKEN
+// (e.g. a docker-run SonarQube MCP pointed at a company server).
+func FindSonarQubeCredentials(e Env) []Credentials {
+	type src struct {
+		label, file, section string
+	}
+	srcs := []src{
+		{"VS Code", filepath.Join(e.appData(), "Code", "User", "mcp.json"), "servers"},
+		{"Cursor", filepath.Join(e.Home, ".cursor", "mcp.json"), "mcpServers"},
+		{"opencode", filepath.Join(e.Home, ".config", "opencode", "opencode.json"), "mcp"},
+	}
+	var out []Credentials
+	for _, s := range srcs {
+		obj, err := readObject(s.file)
+		if err != nil {
+			continue
+		}
+		sec, ok := get(obj, s.section)
+		if !ok {
+			continue
+		}
+		entries, err := parseObject(sec)
+		if err != nil {
+			continue
+		}
+		for _, en := range entries {
+			if ours(string(en.Val)) {
+				continue
+			}
+			var v struct {
+				Env         map[string]string `json:"env"`
+				Environment map[string]string `json:"environment"`
+			}
+			if json.Unmarshal(en.Val, &v) != nil {
+				continue
+			}
+			env := v.Env
+			if env == nil {
+				env = v.Environment
+			}
+			url, tok := env["SONARQUBE_URL"], env["SONARQUBE_TOKEN"]
+			if url == "" || tok == "" || strings.Contains(url+tok, "${") {
+				continue // missing, or a placeholder resolved by the client at runtime
+			}
+			out = append(out, Credentials{Client: s.label, File: s.file, URL: url, Token: tok})
+		}
+	}
+	return out
+}

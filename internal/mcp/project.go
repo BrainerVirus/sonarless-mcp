@@ -3,21 +3,32 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
-// annotateInitialize tells the agent which project this workspace maps to.
+// annotateInitialize tells the agent which project this workspace maps to
+// and which servers it can query.
 func (s *Shim) annotateInitialize(result json.RawMessage) json.RawMessage {
-	if !s.inject.Load() {
+	var note strings.Builder
+	if s.Project != nil && s.local().inject.Load() {
+		fmt.Fprintf(&note, "\n\nThis workspace is SonarQube project %q (detected from %s); tools default projectKey to it.",
+			s.Project.Key, s.Project.KeySource)
+	}
+	if len(s.Backends) > 1 {
+		note.WriteString("\n\nEvery tool takes an optional `server` argument: " + s.serverHelp() +
+			" Use the local server by default (the current working copy); query a remote one only when the user asks" +
+			" about CI or remote results. Remotes can be offline (e.g. VPN not connected): if one is unreachable, say so" +
+			" and carry on with the local server.")
+	}
+	if note.Len() == 0 {
 		return result
 	}
 	var r map[string]any
 	if json.Unmarshal(result, &r) != nil {
 		return result
 	}
-	note := fmt.Sprintf("\n\nThis workspace is SonarQube project %q (detected from %s); tools default projectKey to it.",
-		s.Project.Key, s.Project.KeySource)
 	instr, _ := r["instructions"].(string)
-	r["instructions"] = instr + note
+	r["instructions"] = instr + note.String()
 	b, err := json.Marshal(r)
 	if err != nil {
 		return result
@@ -25,42 +36,69 @@ func (s *Shim) annotateInitialize(result json.RawMessage) json.RawMessage {
 	return b
 }
 
-// annotateTools makes projectKey optional (it is filled in by the shim) and
-// documents the default, mirroring the server's own SONARQUBE_PROJECT_KEY
-// behavior but per workspace.
-func (s *Shim) annotateTools(result json.RawMessage) json.RawMessage {
-	if !s.inject.Load() {
-		return result
+func (s *Shim) serverHelp() string {
+	var parts []string
+	for _, b := range s.Backends {
+		parts = append(parts, fmt.Sprintf("%q = %s", b.Name, b.About))
 	}
-	var r struct {
-		Tools []map[string]any `json:"tools"`
+	return strings.Join(parts, "; ") + "."
+}
+
+// annotateTools makes projectKey optional (the shim fills it in), documents
+// the default, and adds the `server` argument when remotes are configured.
+func (s *Shim) annotateTools(result json.RawMessage) json.RawMessage {
+	inject := s.Project != nil && s.local().inject.Load()
+	multi := len(s.Backends) > 1
+	if !inject && !multi {
+		return result
 	}
 	var raw map[string]any
-	if json.Unmarshal(result, &raw) != nil || json.Unmarshal(result, &r) != nil {
+	if json.Unmarshal(result, &raw) != nil {
 		return result
 	}
-	for _, t := range r.Tools {
+	tools, _ := raw["tools"].([]any)
+	for _, x := range tools {
+		t, _ := x.(map[string]any)
 		schema, _ := t["inputSchema"].(map[string]any)
+		if schema == nil {
+			continue
+		}
 		props, _ := schema["properties"].(map[string]any)
-		for _, p := range []string{"projectKey", "projects"} {
-			prop, ok := props[p].(map[string]any)
-			if !ok {
-				continue
-			}
-			desc, _ := prop["description"].(string)
-			prop["description"] = fmt.Sprintf("%s (Defaults to this workspace's project %q.)", desc, s.Project.Key)
-			if req, ok := schema["required"].([]any); ok {
-				kept := req[:0]
-				for _, x := range req {
-					if x != p {
-						kept = append(kept, x)
-					}
+		if props == nil {
+			props = map[string]any{}
+			schema["properties"] = props
+		}
+		if inject {
+			for _, p := range []string{"projectKey", "projects"} {
+				prop, ok := props[p].(map[string]any)
+				if !ok {
+					continue
 				}
-				schema["required"] = kept
+				desc, _ := prop["description"].(string)
+				prop["description"] = fmt.Sprintf("%s (Defaults to this workspace's project %q.)", desc, s.Project.Key)
+				if req, ok := schema["required"].([]any); ok {
+					kept := req[:0]
+					for _, r := range req {
+						if r != p {
+							kept = append(kept, r)
+						}
+					}
+					schema["required"] = kept
+				}
+			}
+		}
+		if multi {
+			enum := make([]any, len(s.Backends))
+			for i, b := range s.Backends {
+				enum[i] = b.Name
+			}
+			props["server"] = map[string]any{
+				"type":        "string",
+				"enum":        enum,
+				"description": "Which SonarQube to query (default \"" + s.local().Name + "\"): " + s.serverHelp(),
 			}
 		}
 	}
-	raw["tools"] = r.Tools
 	b, err := json.Marshal(raw)
 	if err != nil {
 		return result
@@ -68,10 +106,8 @@ func (s *Shim) annotateTools(result json.RawMessage) json.RawMessage {
 	return b
 }
 
-// projectArg returns, per tool, which argument carries the project: tools
-// whose schema has projectKey take a string, search_sonar_issues_in_projects
-// takes a list. Unknown tools are left alone.
-func projectArg(tool string, cachedTools json.RawMessage) (string, bool) {
+// toolProps returns the input property names of a tool from the cached list.
+func toolProps(tool string, cachedTools json.RawMessage) map[string]bool {
 	var r struct {
 		Tools []struct {
 			Name        string `json:"name"`
@@ -81,65 +117,61 @@ func projectArg(tool string, cachedTools json.RawMessage) (string, bool) {
 		} `json:"tools"`
 	}
 	if json.Unmarshal(cachedTools, &r) != nil {
-		return "", false
+		return nil
 	}
 	for _, t := range r.Tools {
-		if t.Name != tool {
-			continue
-		}
-		if _, ok := t.InputSchema.Properties["projectKey"]; ok {
-			return "projectKey", true
-		}
-		if _, ok := t.InputSchema.Properties["projects"]; ok {
-			return "projects", true
+		if t.Name == tool {
+			out := map[string]bool{}
+			for k := range t.InputSchema.Properties {
+				out[k] = true
+			}
+			return out
 		}
 	}
-	return "", false
+	return nil
 }
 
-// injectProject fills in the workspace's project for a tools/call that
-// didn't name one.
-func (s *Shim) injectProject(params json.RawMessage) json.RawMessage {
-	if !s.inject.Load() {
-		return params
-	}
-	var p struct {
-		Name      string         `json:"name"`
-		Arguments map[string]any `json:"arguments"`
-	}
+// fillDefaults removes the shim's `server` argument and fills in the
+// backend's defaults the agent didn't give: the workspace's project (only
+// where it exists on that server) and the backend's branch.
+func (s *Shim) fillDefaults(b *Backend, params json.RawMessage) json.RawMessage {
 	var raw map[string]any
-	if json.Unmarshal(params, &raw) != nil || json.Unmarshal(params, &p) != nil {
+	if json.Unmarshal(params, &raw) != nil {
 		return params
 	}
-	arg, ok := projectArg(p.Name, s.cached("tools/list"))
-	if !ok {
-		return params
+	args, _ := raw["arguments"].(map[string]any)
+	if args == nil {
+		args = map[string]any{}
 	}
-	if p.Arguments == nil {
-		p.Arguments = map[string]any{}
-	}
-	switch v := p.Arguments[arg].(type) {
-	case nil:
-	case string:
-		if v != "" {
-			return params
+	delete(args, "server")
+	name, _ := raw["name"].(string)
+	props := toolProps(name, s.cached("tools/list"))
+	empty := func(k string) bool {
+		switch v := args[k].(type) {
+		case nil:
+			return true
+		case string:
+			return v == ""
+		case []any:
+			return len(v) == 0
 		}
-	case []any:
-		if len(v) > 0 {
-			return params
+		return false
+	}
+	if s.Project != nil && b.inject.Load() {
+		switch {
+		case props["projectKey"] && empty("projectKey"):
+			args["projectKey"] = s.Project.Key
+		case props["projects"] && empty("projects"):
+			args["projects"] = []string{s.Project.Key}
 		}
-	default:
-		return params
 	}
-	if arg == "projects" {
-		p.Arguments[arg] = []string{s.Project.Key}
-	} else {
-		p.Arguments[arg] = s.Project.Key
+	if b.Branch != "" && props["branch"] && empty("branch") {
+		args["branch"] = b.Branch
 	}
-	raw["arguments"] = p.Arguments
-	b, err := json.Marshal(raw)
+	raw["arguments"] = args
+	out, err := json.Marshal(raw)
 	if err != nil {
 		return params
 	}
-	return b
+	return out
 }

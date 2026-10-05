@@ -26,26 +26,109 @@ import (
 // answering from cache; MCP clients often give up on servers after ~30s.
 const cacheWait = 3 * time.Second
 
-// Shim bridges a client's stdio to the shared HTTP MCP server. It boots the
-// shared containers on demand, keeps the token fresh, and defaults
-// projectKey to the workspace's project.
+// Backend is one SonarQube server reachable through its own shared MCP
+// container: the local server, or a configured remote one.
+type Backend struct {
+	Name   string // "local" or the remote's name; the agent passes it as `server`
+	About  string // one line for the agent, e.g. "remote CI server (branch develop)"
+	APIURL string // SonarQube base URL from the host, for project lookups
+	MCPURL string
+	Branch string // default for tools that take a branch ("" = server's main branch)
+	// Ensure starts whatever the backend needs (containers); cheap when up.
+	Ensure func(ctx context.Context) error
+	// Token returns a valid token; force means the last one was rejected.
+	Token func(ctx context.Context, force bool) (string, error)
+	// Remote backends are optional: probed before use, never on the startup path.
+	Remote bool
+
+	probeMu  sync.Mutex
+	probedAt time.Time
+	probeErr error
+
+	mu      sync.Mutex // serializes boot
+	ready   atomic.Bool
+	token   atomic.Value // string
+	inject  atomic.Bool  // the workspace's project exists here: default projectKey to it
+	project string
+}
+
+// probeTTL caches reachability so an offline remote (VPN down) costs one
+// quick check per window instead of a hang per call.
+const probeTTL = 30 * time.Second
+
+// reachable checks that a remote server answers, with a short timeout.
+func (b *Backend) reachable(ctx context.Context) error {
+	b.probeMu.Lock()
+	defer b.probeMu.Unlock()
+	if time.Since(b.probedAt) < probeTTL {
+		return b.probeErr
+	}
+	pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	_, err := sonar.NewToken(b.APIURL, "").Status(pctx)
+	if err != nil {
+		var apiErr *sonar.APIError
+		if errors.As(err, &apiErr) {
+			err = nil // it answered; auth is checked separately
+		} else {
+			err = fmt.Errorf("server %q (%s) is unreachable right now (VPN or network down?); the local server still works", b.Name, b.APIURL)
+		}
+	}
+	b.probedAt, b.probeErr = time.Now(), err
+	return err
+}
+
+func (b *Backend) currentToken() string {
+	t, _ := b.token.Load().(string)
+	return t
+}
+
+// boot makes the backend usable: containers up, token loaded, project known.
+func (b *Backend) boot(ctx context.Context, p *project.Project) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if err := b.Ensure(ctx); err != nil {
+		return err
+	}
+	if b.currentToken() == "" {
+		if err := b.refresh(ctx, false); err != nil {
+			return err
+		}
+	}
+	if p != nil && b.project != p.Key {
+		err := sonar.NewToken(b.APIURL, b.currentToken()).Do(ctx, http.MethodGet, "/api/components/show",
+			map[string][]string{"component": {p.Key}}, nil)
+		b.inject.Store(err == nil)
+		b.project = p.Key
+	}
+	b.ready.Store(true)
+	return nil
+}
+
+func (b *Backend) refresh(ctx context.Context, force bool) error {
+	t, err := b.Token(ctx, force)
+	if err != nil {
+		return fmt.Errorf("%s SonarQube token: %w", b.Name, err)
+	}
+	b.token.Store(t)
+	return nil
+}
+
+// Shim bridges a client's stdio to the shared HTTP MCP servers. It boots
+// them on demand, keeps tokens fresh, defaults projectKey (and a remote's
+// branch) for the workspace, and routes each tool call to the server the
+// agent picks with the extra `server` argument.
 type Shim struct {
-	Cfg     *config.Config
-	Server  *sonar.Server
-	MCP     *Container
-	Project *project.Project
-	Log     io.Writer
+	Cfg      *config.Config
+	Backends []*Backend // [0] is the default (local)
+	Project  *project.Project
+	Log      io.Writer
 
 	http      *http.Client
 	out       io.Writer
 	outMu     sync.Mutex
-	bootMu    sync.Mutex
-	booted    chan struct{} // closed after the first boot attempt finishes
-	bootOnce  sync.Once
+	booted    chan struct{} // closed after the default backend's first boot attempt
 	bootErr   error
-	token     string
-	tokenMu   sync.Mutex
-	inject    atomic.Bool // project exists on the server: default projectKey to it
 	touchMu   sync.Mutex
 	lastTouch time.Time
 }
@@ -66,13 +149,27 @@ type rpcError struct {
 
 func (m *message) isRequest() bool { return m.Method != "" && len(m.ID) > 0 && string(m.ID) != "null" }
 
+func (s *Shim) local() *Backend { return s.Backends[0] }
+
+func (s *Shim) backend(name string) *Backend {
+	for _, b := range s.Backends {
+		if b.Name == name {
+			return b
+		}
+	}
+	return nil
+}
+
 // Run serves MCP on in/out until in closes.
 func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 	s.out = out
 	s.http = &http.Client{} // tool calls (e.g. analysis) can be slow; rely on ctx
 	s.booted = make(chan struct{})
 	go func() {
-		s.bootErr = s.ensure(ctx)
+		s.bootErr = s.local().boot(ctx, s.Project)
+		if err := idle.EnsureWatcher(s.Cfg); err != nil && s.Log != nil {
+			fmt.Fprintf(s.Log, "sonarless-mcp: idle watcher not started: %v\n", err)
+		}
 		close(s.booted)
 	}()
 
@@ -112,19 +209,33 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 	}
 	if !msg.isRequest() {
 		if s.waitBooted(ctx, 0) == nil && s.bootErr == nil {
-			_, _ = s.forward(ctx, msg) // notifications: best effort
+			_, _ = s.forward(ctx, s.local(), msg) // notifications: best effort
 		}
 		return
 	}
 	if err := s.waitBooted(ctx, -1); err != nil {
 		return // ctx cancelled: client went away
 	}
+	target := s.local()
 	if msg.Method == "tools/call" {
-		msg.Params = s.injectProject(msg.Params)
+		var err error
+		if target, msg.Params, err = s.route(ctx, msg.Params); err != nil {
+			var te toolError
+			if errors.As(err, &te) {
+				s.toolFailure(msg, te.Error())
+			} else {
+				s.send(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32602, "sonarless-mcp: " + err.Error()}})
+			}
+			return
+		}
 	}
-	replies, err := s.forward(ctx, msg)
+	replies, err := s.forward(ctx, target, msg)
 	if err != nil {
-		s.send(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32603, "sonarless-mcp: " + err.Error()}})
+		if msg.Method == "tools/call" {
+			s.toolFailure(msg, err.Error())
+		} else {
+			s.send(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32603, "sonarless-mcp: " + err.Error()}})
+		}
 		return
 	}
 	for _, r := range replies {
@@ -140,6 +251,55 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 		}
 		s.send(r)
 	}
+}
+
+// route picks the backend for a tools/call (its `server` argument, default
+// local), boots it if needed, and fills in that backend's defaults.
+func (s *Shim) route(ctx context.Context, params json.RawMessage) (*Backend, json.RawMessage, error) {
+	var p struct {
+		Arguments map[string]any `json:"arguments"`
+	}
+	_ = json.Unmarshal(params, &p)
+	name, _ := p.Arguments["server"].(string)
+	b := s.local()
+	if name != "" && name != b.Name {
+		if b = s.backend(name); b == nil {
+			return nil, nil, fmt.Errorf("unknown server %q (known: %s)", name, strings.Join(s.names(), ", "))
+		}
+	}
+	if b.Remote {
+		if err := b.reachable(ctx); err != nil {
+			b.ready.Store(false) // re-boot (container, project check) once it is back
+			return nil, nil, toolError{err}
+		}
+	}
+	if !b.ready.Load() {
+		if err := b.boot(ctx, s.Project); err != nil {
+			return nil, nil, toolError{err}
+		}
+	}
+	return b, s.fillDefaults(b, params), nil
+}
+
+// toolError is a failure the agent should see as a failed tool call (it can
+// recover, e.g. by using the local server) rather than a protocol error.
+type toolError struct{ error }
+
+// toolFailure answers a tools/call with an MCP tool error result.
+func (s *Shim) toolFailure(req message, text string) {
+	res, _ := json.Marshal(map[string]any{
+		"isError": true,
+		"content": []map[string]string{{"type": "text", "text": "sonarless-mcp: " + text}},
+	})
+	s.send(message{JSONRPC: "2.0", ID: req.ID, Result: res})
+}
+
+func (s *Shim) names() []string {
+	var out []string
+	for _, b := range s.Backends {
+		out = append(out, b.Name)
+	}
+	return out
 }
 
 // waitBooted waits for the first boot attempt: max<0 forever, 0 non-blocking.
@@ -166,91 +326,47 @@ func (s *Shim) waitBooted(ctx context.Context, max time.Duration) error {
 	}
 }
 
-// ensure makes sure the server, MCP container and token are ready, and
-// starts the idle watcher. Serialized; cheap when everything is already up.
-func (s *Shim) ensure(ctx context.Context) error {
-	s.bootMu.Lock()
-	defer s.bootMu.Unlock()
-	if !s.MCP.Alive(ctx) || !s.Server.Running(ctx) {
-		if err := s.Server.Ensure(ctx); err != nil {
-			return err
-		}
-		if err := s.MCP.Ensure(ctx); err != nil {
-			return err
-		}
-	}
-	if err := s.refreshToken(ctx, false); err != nil {
-		return err
-	}
-	if err := idle.EnsureWatcher(s.Cfg); err != nil {
-		fmt.Fprintf(s.Log, "sonarless-mcp: idle watcher not started: %v\n", err)
-	}
-	if s.Project != nil {
-		err := sonar.NewToken(s.Cfg.ServerURL(), s.currentToken()).Do(ctx, http.MethodGet, "/api/components/show",
-			map[string][]string{"component": {s.Project.Key}}, nil)
-		s.inject.Store(err == nil)
-	}
-	return nil
-}
-
-func (s *Shim) currentToken() string {
-	s.tokenMu.Lock()
-	defer s.tokenMu.Unlock()
-	return s.token
-}
-
-func (s *Shim) refreshToken(ctx context.Context, force bool) error {
-	s.tokenMu.Lock()
-	defer s.tokenMu.Unlock()
-	if s.token != "" && !force {
-		return nil
-	}
-	t, err := s.Server.Token(ctx)
-	if err != nil {
-		return fmt.Errorf("get SonarQube token: %w", err)
-	}
-	s.token = t
-	return nil
-}
-
-// forward POSTs one message upstream and returns the JSON-RPC replies. It
-// recovers once from an expired token and once from stopped containers
+// forward POSTs one message to a backend and returns the JSON-RPC replies.
+// It recovers once from a rejected token and once from stopped containers
 // (e.g. after the idle watcher ran).
-func (s *Shim) forward(ctx context.Context, msg message) ([]message, error) {
+func (s *Shim) forward(ctx context.Context, b *Backend, msg message) ([]message, error) {
 	body, _ := json.Marshal(msg)
 	for attempt := 0; ; attempt++ {
-		replies, status, err := s.post(ctx, body)
+		replies, status, err := s.post(ctx, b, body)
 		switch {
 		case err == nil && status == http.StatusUnauthorized && attempt == 0:
-			if rerr := s.refreshToken(ctx, true); rerr != nil {
+			if rerr := b.refresh(ctx, true); rerr != nil {
 				return nil, rerr
 			}
 			continue
 		case err != nil && attempt == 0 && ctx.Err() == nil:
-			if eerr := s.ensure(ctx); eerr != nil {
-				return nil, eerr
+			b.ready.Store(false)
+			if berr := b.boot(ctx, s.Project); berr != nil {
+				return nil, berr
 			}
 			continue
 		case err != nil:
 			return nil, err
+		case status == http.StatusUnauthorized:
+			return nil, fmt.Errorf("%s SonarQube rejected the token", b.Name)
 		case status/100 != 2:
 			if len(replies) > 0 {
 				return replies, nil // JSON-RPC error body
 			}
-			return nil, fmt.Errorf("MCP server returned HTTP %d", status)
+			return nil, fmt.Errorf("%s MCP server returned HTTP %d", b.Name, status)
 		}
 		return replies, nil
 	}
 }
 
-func (s *Shim) post(ctx context.Context, body []byte) ([]message, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.Cfg.MCPURL(), bytes.NewReader(body))
+func (s *Shim) post(ctx context.Context, b *Backend, body []byte) ([]message, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.MCPURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("Authorization", "Bearer "+s.currentToken())
+	req.Header.Set("Authorization", "Bearer "+b.currentToken())
 	resp, err := s.http.Do(req)
 	if err != nil {
 		return nil, 0, err
@@ -263,11 +379,11 @@ func (s *Shim) post(ctx context.Context, body []byte) ([]message, int, error) {
 		msgs, err := readSSE(resp.Body)
 		return msgs, resp.StatusCode, err
 	}
-	b, err := io.ReadAll(resp.Body)
+	b2, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, err
 	}
-	return decodeMessages(b), resp.StatusCode, nil
+	return decodeMessages(b2), resp.StatusCode, nil
 }
 
 // decodeMessages parses a JSON-RPC message or batch; garbage yields nothing.

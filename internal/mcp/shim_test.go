@@ -1,12 +1,18 @@
 package mcp
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BrainerVirus/sonarless-mcp/internal/config"
 	"github.com/BrainerVirus/sonarless-mcp/internal/project"
@@ -25,10 +31,18 @@ func newTestShim(t *testing.T) *Shim {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &Shim{Cfg: cfg, Project: &project.Project{Key: "acme_web", KeySource: "sonar-project.properties"}}
-	s.inject.Store(true)
+	local := &Backend{Name: "local", About: "the local SonarQube"}
+	local.inject.Store(true)
+	s := &Shim{Cfg: cfg, Backends: []*Backend{local}, Project: &project.Project{Key: "acme_web", KeySource: "sonar-project.properties"}}
 	s.store("tools/list", json.RawMessage(toolsList))
 	return s
+}
+
+func addRemote(s *Shim, inject bool) *Backend {
+	r := &Backend{Name: "work", About: "remote CI server", Branch: "develop"}
+	r.inject.Store(inject)
+	s.Backends = append(s.Backends, r)
+	return r
 }
 
 func args(t *testing.T, params json.RawMessage) map[string]any {
@@ -42,8 +56,9 @@ func args(t *testing.T, params json.RawMessage) map[string]any {
 	return p.Arguments
 }
 
-func TestInjectProject(t *testing.T) {
+func TestFillDefaults(t *testing.T) {
 	s := newTestShim(t)
+	local := s.local()
 	cases := []struct {
 		name, in string
 		want     map[string]any
@@ -60,19 +75,37 @@ func TestInjectProject(t *testing.T) {
 			map[string]any{"projects": []any{"x"}}},
 		{"leaves tools without a project alone", `{"name":"show_rule","arguments":{"key":"go:S100"}}`,
 			map[string]any{"key": "go:S100"}},
+		{"strips the server argument", `{"name":"show_rule","arguments":{"key":"k","server":"local"}}`,
+			map[string]any{"key": "k"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := args(t, s.injectProject(json.RawMessage(tc.in))); !reflect.DeepEqual(got, tc.want) {
+			if got := args(t, s.fillDefaults(local, json.RawMessage(tc.in))); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
 		})
 	}
 
-	s.inject.Store(false) // project unknown to the server: never guess
-	in := `{"name":"get_component_measures","arguments":{}}`
-	if got := string(s.injectProject(json.RawMessage(in))); got != in {
-		t.Errorf("injected without a known project: %s", got)
+	local.inject.Store(false) // project unknown to that server: never guess
+	if got := args(t, s.fillDefaults(local, json.RawMessage(`{"name":"get_component_measures","arguments":{}}`))); len(got) != 0 {
+		t.Errorf("injected without a known project: %v", got)
+	}
+}
+
+func TestRemoteDefaults(t *testing.T) {
+	s := newTestShim(t)
+	work := addRemote(s, true)
+	got := args(t, s.fillDefaults(work, json.RawMessage(`{"name":"get_component_measures","arguments":{"server":"work"}}`)))
+	want := map[string]any{"projectKey": "acme_web", "branch": "develop"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	got = args(t, s.fillDefaults(work, json.RawMessage(`{"name":"get_component_measures","arguments":{"branch":"feature/x"}}`)))
+	if got["branch"] != "feature/x" {
+		t.Errorf("explicit branch overridden: %v", got)
+	}
+	if b := s.backend("work"); b != work || s.backend("nope") != nil {
+		t.Error("backend lookup")
 	}
 }
 
@@ -82,8 +115,11 @@ func TestAnnotateTools(t *testing.T) {
 		Tools []struct {
 			Name        string
 			InputSchema struct {
-				Properties map[string]struct{ Description string }
-				Required   []string
+				Properties map[string]struct {
+					Description string
+					Enum        []string
+				}
+				Required []string
 			}
 		}
 	}
@@ -97,16 +133,29 @@ func TestAnnotateTools(t *testing.T) {
 	if !strings.Contains(m.Properties["projectKey"].Description, `"acme_web"`) {
 		t.Errorf("default not documented: %q", m.Properties["projectKey"].Description)
 	}
+	if _, ok := m.Properties["server"]; ok {
+		t.Error("server argument added without remotes")
+	}
 	if got := r.Tools[2].InputSchema.Required; !reflect.DeepEqual(got, []string{"key"}) {
 		t.Errorf("unrelated required changed: %v", got)
+	}
+
+	addRemote(s, false)
+	_ = json.Unmarshal(s.annotateTools(json.RawMessage(toolsList)), &r)
+	for _, tool := range r.Tools {
+		if got := tool.InputSchema.Properties["server"].Enum; !reflect.DeepEqual(got, []string{"local", "work"}) {
+			t.Errorf("%s server enum = %v", tool.Name, got)
+		}
 	}
 }
 
 func TestAnnotateInitialize(t *testing.T) {
 	s := newTestShim(t)
+	addRemote(s, true)
 	var r map[string]any
 	_ = json.Unmarshal(s.annotateInitialize(json.RawMessage(`{"protocolVersion":"x","instructions":"Base."}`)), &r)
-	if in, _ := r["instructions"].(string); !strings.HasPrefix(in, "Base.") || !strings.Contains(in, "acme_web") {
+	in, _ := r["instructions"].(string)
+	if !strings.HasPrefix(in, "Base.") || !strings.Contains(in, "acme_web") || !strings.Contains(in, `"work" = remote CI server`) {
 		t.Errorf("instructions = %q", in)
 	}
 	if r["protocolVersion"] != "x" {
@@ -145,5 +194,57 @@ func TestCacheRoundTrip(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(s.Cfg.CacheDir, "mcp-cache.json")); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestUnreachableRemoteFailsFast(t *testing.T) {
+	s := newTestShim(t)
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL
+	srv.Close() // nothing listens here any more: like a VPN-only host while offline
+	booted := false
+	work := &Backend{Name: "work", APIURL: url, Remote: true,
+		Ensure: func(context.Context) error { booted = true; return nil }}
+	s.Backends = append(s.Backends, work)
+
+	start := time.Now()
+	_, _, err := s.route(context.Background(), json.RawMessage(`{"name":"show_rule","arguments":{"server":"work"}}`))
+	var te toolError
+	if !errors.As(err, &te) || !strings.Contains(err.Error(), "unreachable") {
+		t.Fatalf("err = %v", err)
+	}
+	if booted {
+		t.Error("started the remote's container although it is unreachable")
+	}
+	if time.Since(start) > 4*time.Second {
+		t.Errorf("took %s", time.Since(start))
+	}
+	// Cached: a second call doesn't probe again.
+	start = time.Now()
+	_, _, _ = s.route(context.Background(), json.RawMessage(`{"name":"show_rule","arguments":{"server":"work"}}`))
+	if time.Since(start) > 100*time.Millisecond {
+		t.Error("probe not cached")
+	}
+
+	_, _, err = s.route(context.Background(), json.RawMessage(`{"name":"show_rule","arguments":{"server":"nope"}}`))
+	if err == nil || errors.As(err, &te) {
+		t.Errorf("unknown server: %v", err)
+	}
+}
+
+func TestToolFailureShape(t *testing.T) {
+	s := newTestShim(t)
+	var out bytes.Buffer
+	s.out = &out
+	s.toolFailure(message{ID: json.RawMessage("7")}, "work is unreachable")
+	var m struct {
+		ID     int
+		Result struct {
+			IsError bool `json:"isError"`
+			Content []struct{ Type, Text string }
+		}
+	}
+	if err := json.Unmarshal(out.Bytes(), &m); err != nil || m.ID != 7 || !m.Result.IsError || !strings.Contains(m.Result.Content[0].Text, "unreachable") {
+		t.Errorf("got %s (%v)", out.String(), err)
 	}
 }

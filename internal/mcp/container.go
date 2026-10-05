@@ -19,20 +19,37 @@ import (
 	"github.com/BrainerVirus/sonarless-mcp/internal/sonar"
 )
 
-// Container manages the shared MCP server container.
+// Container manages one shared MCP server container: the local one (talking
+// to the local SonarQube) or one per remote server.
 type Container struct {
-	Cfg *config.Config
-	Log io.Writer
+	Cfg      *config.Config
+	Log      io.Writer
+	Name     string // container name
+	Port     int    // host port (bound to 127.0.0.1)
+	SonarURL string // SonarQube URL as seen from inside the container
 }
 
-func (m *Container) name() string { return m.Cfg.MCPContainer() }
+// NewLocal is the MCP container for the local SonarQube.
+func NewLocal(cfg *config.Config, log io.Writer) *Container {
+	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer(), Port: cfg.Int(config.MCPPort), SonarURL: cfg.ServerURLInNetwork()}
+}
+
+// NewRemote is the MCP container for a remote SonarQube.
+func NewRemote(cfg *config.Config, log io.Writer, name, url string, port int) *Container {
+	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer() + "-" + name, Port: port, SonarURL: url}
+}
+
+func (m *Container) name() string { return m.Name }
+
+// URL is the container's MCP endpoint on the host.
+func (m *Container) URL() string { return fmt.Sprintf("http://127.0.0.1:%d/mcp", m.Port) }
 
 func (m *Container) spec() string {
 	h := sha256.Sum256([]byte(strings.Join([]string{
 		m.Cfg.Get(config.MCPImage),
-		m.Cfg.Get(config.MCPPort),
+		fmt.Sprint(m.Port),
 		m.Cfg.Network(),
-		m.Cfg.ServerURLInNetwork(),
+		m.SonarURL,
 		m.Cfg.Get(config.MCPToolsets),
 		m.Cfg.Get(config.MCPReadOnly),
 	}, "\x00")))
@@ -88,12 +105,12 @@ func (m *Container) create(ctx context.Context) error {
 	}
 	args := []string{"run", "-d", "--init", "--name", m.name(),
 		"--network", m.Cfg.Network(),
-		"-p", "127.0.0.1:" + m.Cfg.Get(config.MCPPort) + ":8080",
+		"-p", fmt.Sprintf("127.0.0.1:%d:8080", m.Port),
 		"--label", sonar.LabelManaged + "=true",
 		"--label", sonar.LabelSpec + "=" + m.spec(),
 		"-e", "SONARQUBE_TRANSPORT=http",
 		"-e", "SONARQUBE_HTTP_HOST=0.0.0.0",
-		"-e", "SONARQUBE_URL=" + m.Cfg.ServerURLInNetwork(),
+		"-e", "SONARQUBE_URL=" + m.SonarURL,
 		"-e", "SONARQUBE_LOG_TO_FILE_DISABLED=true",
 	}
 	if v := m.Cfg.Get(config.MCPToolsets); v != "" {
@@ -112,7 +129,7 @@ func (m *Container) create(ctx context.Context) error {
 func (m *Container) Alive(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, m.Cfg.MCPURL(), strings.NewReader("{}"))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, m.URL(), strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -127,7 +144,7 @@ func (m *Container) waitHTTP(ctx context.Context) error {
 	for !m.Alive(ctx) {
 		if time.Now().After(deadline) {
 			logs, _ := docker.Run(ctx, "logs", "--tail", "20", m.name())
-			return fmt.Errorf("MCP container not answering on %s after 90s\n%s", m.Cfg.MCPURL(), logs)
+			return fmt.Errorf("MCP container not answering on %s after 90s\n%s", m.URL(), logs)
 		}
 		select {
 		case <-ctx.Done():
