@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.2.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.1.0...v0.2.0) (2026-10-05)
+
+### Features
+
+* **remote:** query remote SonarQube servers next to the local one ([490a5a7](https://github.com/BrainerVirus/sonarless-mcp/commit/490a5a77ba6000dffefaa8a65a723feef109ee77))
+
 ## [0.1.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.0.0...v0.1.0) (2026-10-05)
 
 ### Features
