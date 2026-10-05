@@ -116,7 +116,7 @@ if [ "$on_path" = 0 ]; then
   [ "$(basename "${SHELL:-sh}")" = fish ] && now="fish_add_path $INSTALL_DIR"
   say "To use sonarless-mcp in this terminal now, run:  $now   (new terminals pick it up)"
 elif [ -n "$refresh" ]; then
-  say "If this terminal doesn't find sonarless-mcp yet, run:  $refresh   (or open a new terminal)"
+  say "If this terminal doesn't find sonarless-mcp yet, run:  $refresh   (terminals with their own command check, like Warp, need a new tab)"
 fi
 command -v docker >/dev/null 2>&1 || say "note: Docker not found; sonarless-mcp needs Docker (Docker Desktop on macOS) to run SonarQube."
 
