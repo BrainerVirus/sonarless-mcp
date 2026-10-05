@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -83,15 +84,22 @@ func Add(cfg *config.Config, r Remote, token string) (Remote, error) {
 	if err != nil {
 		return r, err
 	}
+	taken := map[int]bool{cfg.Int(config.ServerPort): true, cfg.Int(config.MCPPort): true}
 	next := cfg.Int(config.MCPPort) + 1
 	idx := -1
 	for i, x := range rs {
 		if x.Name == r.Name {
 			idx = i
 		}
+		if x.Name != r.Name {
+			taken[x.Port] = true
+		}
 		if x.Port >= next {
 			next = x.Port + 1
 		}
+	}
+	for taken[next] || !portFree(next) {
+		next++
 	}
 	if idx >= 0 {
 		if r.Port == 0 {
@@ -112,6 +120,16 @@ func Add(cfg *config.Config, r Remote, token string) (Remote, error) {
 		return r, err
 	}
 	return r, save(cfg, rs)
+}
+
+// portFree reports whether nothing listens on 127.0.0.1:port.
+func portFree(port int) bool {
+	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return false
+	}
+	_ = l.Close()
+	return true
 }
 
 // Remove deletes a remote and its token.

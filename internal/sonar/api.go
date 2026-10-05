@@ -5,6 +5,7 @@ package sonar
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -86,8 +87,22 @@ func (c *Client) Status(ctx context.Context) (string, error) {
 
 // Valid reports whether the client's credentials authenticate.
 func (c *Client) Valid(ctx context.Context) bool {
+	ok, err := c.CheckAuth(ctx)
+	return err == nil && ok
+}
+
+// CheckAuth says whether the credentials authenticate; err is set when the
+// server couldn't be asked (network trouble), as opposed to a rejection.
+func (c *Client) CheckAuth(ctx context.Context) (bool, error) {
 	var r struct{ Valid bool }
-	return c.Do(ctx, http.MethodGet, "/api/authentication/validate", nil, &r) == nil && r.Valid
+	if err := c.Do(ctx, http.MethodGet, "/api/authentication/validate", nil, &r); err != nil {
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && (apiErr.Status == http.StatusUnauthorized || apiErr.Status == http.StatusForbidden) {
+			return false, nil
+		}
+		return false, err
+	}
+	return r.Valid, nil
 }
 
 // MigrateDB triggers the database upgrade after a server version bump.

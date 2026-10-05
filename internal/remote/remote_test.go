@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -72,4 +73,23 @@ func TestValidation(t *testing.T) {
 	if _, err := Add(cfg, Remote{Name: "ok", URL: "https://x"}, "  "); err == nil {
 		t.Error("accepted empty token")
 	}
+}
+
+func TestPortsAvoidServerAndBusyPorts(t *testing.T) {
+	cfg := testCfg(t)
+	t.Setenv(config.MCPPort, "9233")
+	t.Setenv(config.ServerPort, "9234")
+	cfg2, _, _ := config.Load("")
+	l, err := net.Listen("tcp", "127.0.0.1:9235")
+	if err == nil {
+		defer l.Close()
+	}
+	r, err := Add(cfg2, Remote{Name: "a", URL: "https://x"}, "0123456789abcdef0123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Port == 9234 || r.Port == 9233 || r.Port == 9235 {
+		t.Errorf("assigned clashing port %d", r.Port)
+	}
+	_ = cfg
 }
