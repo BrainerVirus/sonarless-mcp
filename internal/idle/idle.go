@@ -106,10 +106,17 @@ func Spawn(cfg *config.Config, logName string, args ...string) error {
 	cmd := exec.Command(exe, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = nil, logf, logf
 	detach(cmd)
+	return start(cmd)
+}
+
+// start starts a detached cmd and reaps it when it exits, so a long-lived
+// spawner (the MCP shim) never keeps an exited daemon as a <defunct> child.
+func start(cmd *exec.Cmd) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	return cmd.Process.Release()
+	go func() { _ = cmd.Wait() }()
+	return nil
 }
 
 // Watch runs the watcher loop in the foreground (the `daemon` command).
