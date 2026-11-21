@@ -93,3 +93,15 @@ func TestPortsAvoidServerAndBusyPorts(t *testing.T) {
 	}
 	_ = cfg
 }
+
+func TestAddSkipsOwnPorts(t *testing.T) {
+	t.Setenv(config.GatewayPort, "9236") // the gateway sits right above the MCP port
+	cfg := testCfg(t)
+	w, err := Add(cfg, Remote{Name: "work", URL: "https://sonar.example.com"}, "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Port == cfg.Int(config.GatewayPort) || w.Port == cfg.Int(config.MCPPort) || w.Port == cfg.Int(config.ServerPort) {
+		t.Errorf("remote got sonarless-mcp's own port %d", w.Port)
+	}
+}

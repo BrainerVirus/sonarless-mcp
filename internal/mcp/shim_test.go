@@ -240,7 +240,7 @@ func TestToolFailureShape(t *testing.T) {
 	s := newTestShim(t)
 	var out bytes.Buffer
 	s.out = &out
-	s.toolFailure(message{ID: json.RawMessage("7")}, "work is unreachable")
+	s.toolFailure(s.send, message{ID: json.RawMessage("7")}, "work is unreachable")
 	var m struct {
 		ID     int
 		Result struct {
@@ -280,7 +280,7 @@ func TestLocalTools(t *testing.T) {
 	s.out = &out
 	s.booted = make(chan struct{}) // never closed: SonarQube still "starting"
 	s.handle(context.Background(), message{JSONRPC: "2.0", ID: json.RawMessage("5"), Method: "tools/call",
-		Params: json.RawMessage(`{"name":"sonarless_status","arguments":{}}`)})
+		Params: json.RawMessage(`{"name":"sonarless_status","arguments":{}}`)}, s.send)
 	if !called || !strings.Contains(out.String(), "all good") || !strings.Contains(out.String(), `"id":5`) {
 		t.Errorf("called=%v out=%s", called, out.String())
 	}

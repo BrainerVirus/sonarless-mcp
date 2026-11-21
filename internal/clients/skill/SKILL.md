@@ -10,7 +10,7 @@ sonarless-mcp runs SonarQube locally (one shared server + one shared SonarQube M
 
 ## Tools you have
 
-- **SonarQube tools** (`search_sonar_issues_in_projects`, `get_project_quality_gate_status`, `get_component_measures`, `show_rule`, …). `projectKey` defaults to this workspace's project. Every tool takes an optional **`server`** argument: `local` (default — the working copy as last scanned) or a remote's name (what CI found, on the remote's default branch).
+- **SonarQube tools** (`search_sonar_issues_in_projects`, `get_project_quality_gate_status`, `get_component_measures`, `show_rule`, …). `projectKey` defaults to this workspace's project. If it doesn't (the tools still require `projectKey` and `sonarless_project`/`sonarless_scan` are missing, so your client did not send its workspace), run `sonarless-mcp project` in the workspace to get the key and pass it explicitly. Every tool takes an optional **`server`** argument: `local` (default — the working copy as last scanned) or a remote's name (what CI found, on the remote's default branch).
 - **sonarless_status** — local containers, remotes and whether they're reachable now.
 - **sonarless_project** — detected project key/name, where they came from, which servers have the project.
 - **sonarless_scan** — scan the workspace locally (1–5 min) and get the quality gate. Run it after code changes; local results only update when you scan.

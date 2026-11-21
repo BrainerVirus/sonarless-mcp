@@ -84,7 +84,8 @@ func Add(cfg *config.Config, r Remote, token string) (Remote, error) {
 	if err != nil {
 		return r, err
 	}
-	taken := map[int]bool{cfg.Int(config.ServerPort): true, cfg.Int(config.MCPPort): true}
+	// Never hand out a port sonarless-mcp itself uses (server, MCP, gateway).
+	taken := map[int]bool{cfg.Int(config.ServerPort): true, cfg.Int(config.MCPPort): true, cfg.Int(config.GatewayPort): true}
 	next := cfg.Int(config.MCPPort) + 1
 	idx := -1
 	for i, x := range rs {

@@ -35,6 +35,7 @@ const (
 	AdminPass        = "SONARLESS_ADMIN_PASS"
 	PluginsDirKey    = "SONARLESS_PLUGINS_DIR"
 	MCPPort          = "SONARLESS_MCP_PORT"
+	GatewayPort      = "SONARLESS_GATEWAY_PORT"
 	MCPImage         = "SONARLESS_MCP_IMAGE"
 	MCPToolsets      = "SONARLESS_MCP_TOOLSETS"
 	MCPReadOnly      = "SONARLESS_MCP_READ_ONLY"
@@ -62,6 +63,7 @@ var Keys = []Key{
 	{Name: AdminPass, Default: "admin", Help: "local admin password"},
 	{Name: PluginsDirKey, Help: "dir of extra plugin jars (default: <config dir>/plugins)"},
 	{Name: MCPPort, Default: "9235", Help: "host port for the shared MCP server (127.0.0.1)"},
+	{Name: GatewayPort, Default: "9233", Help: "host port of the gateway AI clients connect to directly over HTTP (127.0.0.1)"},
 	{Name: MCPImage, Default: "sonarsource/sonarqube-mcp:latest", Help: "SonarQube MCP server image"},
 	{Name: MCPToolsets, Help: "comma-separated MCP toolsets to enable (server default when empty)"},
 	{Name: MCPReadOnly, Default: "false", Help: "disable MCP write tools"},
@@ -172,7 +174,7 @@ func Load(projectRoot string) (*Config, []string, error) {
 			return nil, nil, fmt.Errorf("%s=%q (from %s) is not a heap size such as 256m or 1g", n, v, c.sources[n])
 		}
 	}
-	for _, n := range []string{ServerPort, MCPPort} {
+	for _, n := range []string{ServerPort, MCPPort, GatewayPort} {
 		if _, err := strconv.Atoi(c.values[n]); err != nil {
 			return nil, nil, fmt.Errorf("%s=%q (from %s) is not a port number", n, c.values[n], c.sources[n])
 		}

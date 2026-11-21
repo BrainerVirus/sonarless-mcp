@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BrainerVirus/sonarless-mcp/internal/clients"
 	"github.com/BrainerVirus/sonarless-mcp/internal/config"
 	"github.com/BrainerVirus/sonarless-mcp/internal/docker"
 	"github.com/BrainerVirus/sonarless-mcp/internal/idle"
@@ -287,8 +288,9 @@ func main() {
 
 Starts the shared SonarQube server and MCP container on demand (resuming the
 existing ones), keeps the token valid, and defaults every tool's projectKey to
-the workspace's project. Point your client at "sonarless-mcp mcp"; see
-"sonarless-mcp mcp-config <client>" for ready-made snippets.`,
+the workspace's project. Clients that speak Streamable HTTP can skip this
+process and connect to the gateway ("sonarless-mcp serve") instead; setup
+picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			e, err := load(dirArg(args), true)
@@ -309,7 +311,7 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 
 	root.AddCommand(&cobra.Command{
 		Use:       "mcp-config <claude|opencode|cursor|vscode|codex>",
-		Short:     "Print how to register `sonarless-mcp mcp` in an AI client",
+		Short:     "Print how to register sonarless-mcp in an AI client (direct HTTP or the stdio bridge)",
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{"claude", "opencode", "cursor", "vscode", "codex"},
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -320,7 +322,11 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 			if r, err := filepath.EvalSymlinks(exe); err == nil && !strings.Contains(r, "go-build") {
 				exe = r
 			}
-			s, err := clientSnippet(args[0], exe)
+			e, err := load("", false)
+			if err != nil {
+				return err
+			}
+			s, err := clientSnippet(args[0], exe, gatewayDirect(e.cfg, exe))
 			if err != nil {
 				return err
 			}
@@ -330,6 +336,8 @@ the workspace's project. Point your client at "sonarless-mcp mcp"; see
 	})
 
 	root.AddCommand(setupCommand())
+	root.AddCommand(serveCommand())
+	root.AddCommand(ensureCommand())
 	root.AddCommand(updateCommand())
 	root.AddCommand(remoteCommand())
 
@@ -373,27 +381,37 @@ func printMeasures(m map[string]any) {
 	}
 }
 
-func clientSnippet(client, exe string) (string, error) {
+func clientSnippet(client, exe string, d clients.Direct) (string, error) {
 	q, _ := json.Marshal(exe)
+	direct := func(v any) string { b, _ := json.MarshalIndent(v, "  ", "  "); return string(b) }
+	var http, stdio string
 	switch client {
 	case "claude":
-		return fmt.Sprintf("claude mcp add -s user sonarqube -- %s mcp", shellQuote(exe)), nil
+		j, _ := json.Marshal(clients.ClaudeDirect(d))
+		http = fmt.Sprintf("claude mcp add-json -s user sonarqube %s", shellQuote(string(j)))
+		stdio = fmt.Sprintf("claude mcp add -s user sonarqube -- %s mcp", shellQuote(exe))
 	case "opencode":
-		return fmt.Sprintf(`Add to ~/.config/opencode/opencode.json under "mcp":
-  "sonarqube": { "type": "local", "enabled": true, "command": [%s, "mcp"] }`, q), nil
+		http = "Add to ~/.config/opencode/opencode.json under \"mcp\" → \"servers\" (opencode 2.x; 1.x: directly under \"mcp\", plus \"enabled\": true). The gateway must be running (see `sonarless-mcp serve`):\n  \"sonarqube\": " + direct(clients.OpencodeDirect(d, true))
+		stdio = fmt.Sprintf(`Add to ~/.config/opencode/opencode.json under "mcp":
+  "sonarqube": { "type": "local", "enabled": true, "command": [%s, "mcp"] }`, q)
 	case "cursor":
-		return fmt.Sprintf(`Add to ~/.cursor/mcp.json:
-{ "mcpServers": { "sonarqube": { "command": %s, "args": ["mcp", "${workspaceFolder}"] } } }`, q), nil
+		http = "Add to ~/.cursor/mcp.json under \"mcpServers\" (needs " + d.TokenEnv + " in Cursor's environment and the gateway running):\n  \"sonarqube\": " + direct(clients.CursorDirect(d))
+		stdio = fmt.Sprintf(`Add to ~/.cursor/mcp.json:
+{ "mcpServers": { "sonarqube": { "command": %s, "args": ["mcp", "${workspaceFolder}"] } } }`, q)
 	case "vscode":
-		return fmt.Sprintf(`Add to your VS Code user mcp.json:
-{ "servers": { "sonarqube": { "type": "stdio", "command": %s, "args": ["mcp", "${workspaceFolder}"] } } }`, q), nil
+		http = "Add to your VS Code user mcp.json under \"servers\" (needs " + d.TokenEnv + " in VS Code's environment and the gateway running):\n  \"sonarqube\": " + direct(clients.VSCodeDirect(d))
+		stdio = fmt.Sprintf(`Add to your VS Code user mcp.json:
+{ "servers": { "sonarqube": { "type": "stdio", "command": %s, "args": ["mcp", "${workspaceFolder}"] } } }`, q)
 	case "codex":
-		return fmt.Sprintf(`Add to ~/.codex/config.toml:
+		http = "Add to ~/.codex/config.toml (needs " + d.TokenEnv + " in Codex's environment and the gateway running):\n" + clients.CodexDirect("sonarqube", d)
+		stdio = fmt.Sprintf(`Add to ~/.codex/config.toml:
 [mcp_servers.sonarqube]
 command = %s
-args = ["mcp"]`, q), nil
+args = ["mcp"]`, q)
+	default:
+		return "", fmt.Errorf("unknown client %q", client)
 	}
-	return "", fmt.Errorf("unknown client %q", client)
+	return "Direct HTTP (no per-client process):\n" + http + "\n\nOr the stdio bridge (one process per client session):\n" + stdio, nil
 }
 
 func shellQuote(s string) string {

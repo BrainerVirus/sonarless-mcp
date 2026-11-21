@@ -95,6 +95,12 @@ func Spawn(cfg *config.Config, logName string, args ...string) error {
 	if err != nil {
 		return err
 	}
+	return SpawnExe(exe, cfg, logName, args...)
+}
+
+// SpawnExe is Spawn for a given executable: a long-lived process whose own
+// binary was replaced (self-update) passes the path it was started from.
+func SpawnExe(exe string, cfg *config.Config, logName string, args ...string) error {
 	if err := os.MkdirAll(cfg.CacheDir, 0o755); err != nil {
 		return err
 	}
