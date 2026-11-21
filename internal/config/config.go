@@ -79,7 +79,7 @@ var Keys = []Key{
 	{Name: ProjectName, Project: true, Help: "override the detected project name"},
 	{Name: Sources, Default: ".", Project: true, Help: "sonar.sources for CLI scans without sonar-project.properties"},
 	{Name: Scanner, Project: true, Help: "force scanner: cli, maven, gradle or dotnet (auto when empty)"},
-	{Name: ScannerImage, Default: "sonarsource/sonar-scanner-cli:12.1", Project: true, Help: "sonar-scanner CLI image"},
+	{Name: ScannerImage, Default: "sonarsource/sonar-scanner-cli:12.4", Project: true, Help: "sonar-scanner CLI image"},
 	{Name: ScanTests, Default: "false", Project: true, Help: "run tests during maven/gradle/dotnet scans (needed for coverage)"},
 	{Name: MetricsFile, Default: "sonar-metrics.json", Project: true, Help: "file written by `sonarless-mcp results`"},
 }

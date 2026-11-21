@@ -4,10 +4,9 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"sync"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // Option is one selectable row.
@@ -19,29 +18,16 @@ type Option struct {
 	Selected  bool
 }
 
-// styles are built on first use, not at package init: creating lipgloss
-// styles makes it query the terminal (background color, cursor position),
-// which every sonarless-mcp command would otherwise pay for at startup.
-type styles struct{ title, cursor, checked, dim, tagOK, tagCfg lipgloss.Style }
-
+// Styles are plain values in lipgloss v2: building them does not touch the
+// terminal, and the program downsamples colors when it renders.
 var (
-	stylesOnce sync.Once
-	st         styles
+	titleStyle   = lipgloss.NewStyle().Bold(true)
+	cursorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	checkedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	dimStyle     = lipgloss.NewStyle().Faint(true)
+	tagOKStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	tagCfgStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 )
-
-func getStyles() styles {
-	stylesOnce.Do(func() {
-		st = styles{
-			title:   lipgloss.NewStyle().Bold(true),
-			cursor:  lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true),
-			checked: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-			dim:     lipgloss.NewStyle().Faint(true),
-			tagOK:   lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-			tagCfg:  lipgloss.NewStyle().Foreground(lipgloss.Color("14")),
-		}
-	})
-	return st
-}
 
 const (
 	rowAll  = -2
@@ -61,7 +47,7 @@ func (m model) Init() tea.Cmd { return nil }
 func (m model) rows() int { return len(m.opts) + 2 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	k, ok := msg.(tea.KeyMsg)
+	k, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}
@@ -74,7 +60,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cursor < m.rows()-1 {
 			m.cursor++
 		}
-	case " ", "x":
+	case "space", "x":
 		m.toggle(m.cursor - 2)
 	case "a":
 		m.toggle(rowAll)
@@ -108,16 +94,19 @@ func (m *model) toggle(row int) {
 	}
 }
 
-func (m model) View() string {
+func (m model) View() tea.View {
+	return tea.NewView(m.render())
+}
+
+func (m model) render() string {
 	if m.done || m.aborted {
 		return ""
 	}
-	st := getStyles()
 	var b strings.Builder
-	b.WriteString(st.title.Render(m.heading) + "\n\n")
+	b.WriteString(titleStyle.Render(m.heading) + "\n\n")
 	line := func(i int, text string) {
 		if i == m.cursor {
-			b.WriteString(st.cursor.Render("› ") + text + "\n")
+			b.WriteString(cursorStyle.Render("› ") + text + "\n")
 		} else {
 			b.WriteString("  " + text + "\n")
 		}
@@ -128,18 +117,18 @@ func (m model) View() string {
 	for i, o := range m.opts {
 		box := "[ ]"
 		if o.Selected {
-			box = st.checked.Render("[x]")
+			box = checkedStyle.Render("[x]")
 		}
-		tag := st.dim.Render(" · " + o.Tag)
+		tag := dimStyle.Render(" · " + o.Tag)
 		switch o.Tag {
 		case "detected":
-			tag = st.tagOK.Render(" · detected")
+			tag = tagOKStyle.Render(" · detected")
 		case "already configured":
-			tag = st.tagCfg.Render(" · already configured")
+			tag = tagCfgStyle.Render(" · already configured")
 		}
 		line(i+2, fmt.Sprintf("%s %s%s", box, o.Label, tag))
 	}
-	b.WriteString("\n" + st.dim.Render("↑/↓ move · space toggle · a all · n none · enter confirm · esc cancel") + "\n")
+	b.WriteString("\n" + dimStyle.Render("↑/↓ move · space toggle · a all · n none · enter confirm · esc cancel") + "\n")
 	return b.String()
 }
 

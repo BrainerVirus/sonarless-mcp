@@ -4,25 +4,26 @@ import (
 	"reflect"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func press(m model, keys ...string) model {
 	for _, k := range keys {
-		var msg tea.KeyMsg
+		var msg tea.KeyPressMsg
 		switch k {
 		case "up":
-			msg = tea.KeyMsg{Type: tea.KeyUp}
+			msg = tea.KeyPressMsg{Code: tea.KeyUp}
 		case "down":
-			msg = tea.KeyMsg{Type: tea.KeyDown}
+			msg = tea.KeyPressMsg{Code: tea.KeyDown}
 		case "enter":
-			msg = tea.KeyMsg{Type: tea.KeyEnter}
+			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
 		case "esc":
-			msg = tea.KeyMsg{Type: tea.KeyEsc}
+			msg = tea.KeyPressMsg{Code: tea.KeyEscape}
 		case " ":
-			msg = tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
+			msg = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
 		default:
-			msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+			r := []rune(k)[0]
+			msg = tea.KeyPressMsg{Code: r, Text: k}
 		}
 		next, _ := m.Update(msg)
 		m = next.(model)
