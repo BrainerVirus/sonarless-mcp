@@ -173,7 +173,7 @@ features as tools, so any client can use them without knowing the CLI:
 
 | Tool | Does |
 |---|---|
-| `sonarless_status` | local containers, remotes and whether they're reachable |
+| `sonarless_status` | containers and their memory, gateway sessions, running bridges and scans, remotes and whether they're reachable |
 | `sonarless_project` | detected project key/name, its source, which servers have it |
 | `sonarless_scan` | scan the workspace locally and report the quality gate |
 | `sonarless_remote_sync` | align local rules with a remote (CI) — when remotes exist |
@@ -239,9 +239,24 @@ Remotes are built to stay out of the way:
 sonarless-mcp scan            # detect, start server, scan, wait for the quality gate
 sonarless-mcp results         # key metrics, saved to sonar-metrics.json
 sonarless-mcp project         # what was detected and where it came from
-sonarless-mcp status | start | stop
+sonarless-mcp status [--json] # containers and their memory, gateway, bridges, running scans
+sonarless-mcp start           # start the SonarQube server
+sonarless-mcp stop [--all]    # stop the server and every MCP container; --all: the gateway too
 sonarless-mcp reset --yes     # wipe this version's history and start fresh
 ```
+
+`status` lists the server, local MCP and remote MCP containers (state, image,
+memory in use), the gateway (pid, port, uptime, and each workspace session with
+its last request), the stdio bridges (`sonarless-mcp mcp`) still running and the
+scans in progress, CLI or agent-started (`waiting` for the server to start, or
+`scanning`). `--json` prints the same as JSON.
+
+`stop` stops the server, the local MCP container and every remote MCP
+container, including one left from a removed remote. It leaves the gateway
+running: it holds no container memory and connected clients expect it to
+answer. `stop --all` stops it too, through its login service where setup
+installed one (systemd stops it until the next login, launchd until the next
+login or `setup`); the next client that needs it starts it again.
 
 Scanners: Maven projects use `./mvnw` → `mvn` → a Maven container; Gradle
 projects use `./gradlew` → `gradle` → a Gradle container (the SonarQube plugin is

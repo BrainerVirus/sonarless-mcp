@@ -44,6 +44,7 @@ type Gateway struct {
 	NewSession func(workspace string) (*Shim, error)
 
 	ctx      context.Context
+	started  time.Time
 	mu       sync.Mutex
 	sessions map[string]*gatewaySession
 	inflight atomic.Int64
@@ -178,10 +179,11 @@ func (g *Gateway) Serve(ctx context.Context) error {
 // Busy reports whether a request is being served right now.
 func (g *Gateway) Busy() bool { return g.inflight.Load() > 0 }
 
-// Handler serves /health (no token: a readiness probe) and the MCP endpoint.
-// ctx bounds the sessions' background work (container boot).
+// Handler serves /health (no token: a readiness probe), /status (sessions,
+// for `sonarless-mcp status`) and the MCP endpoint. ctx bounds the
+// sessions' background work (container boot).
 func (g *Gateway) Handler(ctx context.Context) http.Handler {
-	g.ctx = ctx
+	g.ctx, g.started = ctx, time.Now()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if !localHost(r.Host) {
@@ -191,6 +193,7 @@ func (g *Gateway) Handler(ctx context.Context) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": g.Version})
 	})
+	mux.HandleFunc(statusPath, g.serveStatus)
 	mux.HandleFunc(config.GatewayPath, g.serveMCP)
 	mux.HandleFunc("/mcp", g.serveMCP)
 	return mux

@@ -13,11 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/BrainerVirus/sonarless-mcp/internal/clients"
 	"github.com/BrainerVirus/sonarless-mcp/internal/config"
-	"github.com/BrainerVirus/sonarless-mcp/internal/docker"
 	"github.com/BrainerVirus/sonarless-mcp/internal/idle"
 	"github.com/BrainerVirus/sonarless-mcp/internal/mcp"
 	"github.com/BrainerVirus/sonarless-mcp/internal/project"
@@ -107,21 +105,7 @@ func main() {
 		},
 	})
 
-	root.AddCommand(&cobra.Command{
-		Use:   "stop",
-		Short: "Stop the shared SonarQube server and MCP container",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			e, err := load("", false)
-			if err != nil {
-				return err
-			}
-			if err := stopAll(ctx, e); err != nil {
-				return err
-			}
-			fmt.Println("Stopped.")
-			return nil
-		},
-	})
+	root.AddCommand(stopCommand())
 
 	var resetYes bool
 	reset := &cobra.Command{
@@ -146,42 +130,7 @@ func main() {
 	reset.Flags().BoolVar(&resetYes, "yes", false, "confirm deleting this version's scan history")
 	root.AddCommand(reset)
 
-	root.AddCommand(&cobra.Command{
-		Use:   "status",
-		Short: "Show server, MCP and idle-stop state",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			e, err := load("", false)
-			if err != nil {
-				return err
-			}
-			if err := docker.Available(ctx); err != nil {
-				return err
-			}
-			rows := []struct{ label, name, url string }{
-				{"server", e.cfg.ServerContainer(), e.cfg.ServerURL()},
-				{"mcp", e.cfg.MCPContainer(), e.cfg.MCPURL()},
-			}
-			for _, c := range remoteContainers(e) {
-				rows = append(rows, struct{ label, name, url string }{"remote", c.Name, c.SonarURL})
-			}
-			for _, c := range rows {
-				state := "absent"
-				if ct, err := docker.Inspect(ctx, c.name); err == nil {
-					state = ct.Status + " (" + ct.Image + ")"
-				}
-				fmt.Printf("%-7s %-20s %-48s %s\n", c.label, c.name, state, c.url)
-			}
-			timeout, _ := e.cfg.IdleTimeout()
-			if timeout == 0 {
-				fmt.Println("idle    auto-stop disabled")
-			} else if last := idle.Last(e.cfg); last.IsZero() {
-				fmt.Printf("idle    auto-stop after %s; no activity recorded\n", timeout)
-			} else {
-				fmt.Printf("idle    auto-stop after %s; last activity %s ago\n", timeout, time.Since(last).Round(time.Second))
-			}
-			return nil
-		},
-	})
+	root.AddCommand(statusCommand())
 
 	var scanOpt scan.Options
 	scanCmd := &cobra.Command{
@@ -303,6 +252,8 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 			if err != nil {
 				return err
 			}
+			rec, _ := idle.Register(e.cfg, idle.Proc{Kind: idle.KindShim, Workspace: e.project.Root})
+			defer rec.Done() // `status` lists running bridges
 			shim := &mcp.Shim{Cfg: e.cfg, Backends: backends, Local: agentTools(e), Project: e.project, Log: os.Stderr}
 			return shim.Run(ctx, os.Stdin, os.Stdout)
 		},
@@ -354,7 +305,7 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 			for _, c := range remoteContainers(e) {
 				names = append(names, c.Name)
 			}
-			return idle.Watch(ctx, e.cfg, names, func(ctx context.Context) error { return stopAll(ctx, e) }, os.Stderr)
+			return idle.Watch(ctx, e.cfg, names, func(ctx context.Context) error { return stopContainers(ctx, e) }, os.Stderr)
 		},
 	})
 
@@ -362,14 +313,6 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-}
-
-func stopAll(ctx context.Context, e *env) error {
-	errs := []error{e.mcp.Stop(ctx), e.server.Stop(ctx)}
-	for _, c := range remoteContainers(e) {
-		errs = append(errs, c.Stop(ctx))
-	}
-	return errors.Join(errs...)
 }
 
 func printMeasures(m map[string]any) {
