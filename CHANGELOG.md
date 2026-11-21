@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.5.2](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.5.1...v0.5.2) (2026-11-21)
+
+### Bug Fixes
+
+* **idle:** the daemon drops inherited descriptors and is reaped, not left defunct ([#3](https://github.com/BrainerVirus/sonarless-mcp/issues/3)) ([bf54430](https://github.com/BrainerVirus/sonarless-mcp/commit/bf54430785fdc36443459c8351a41224adf64169))
+
 ## [0.5.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.5.0...v0.5.1) (2026-10-05)
 
 ### Bug Fixes
