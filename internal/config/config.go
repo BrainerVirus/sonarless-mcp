@@ -38,6 +38,7 @@ const (
 	MCPImage         = "SONARLESS_MCP_IMAGE"
 	MCPToolsets      = "SONARLESS_MCP_TOOLSETS"
 	MCPReadOnly      = "SONARLESS_MCP_READ_ONLY"
+	MCPJavaOpts      = "SONARLESS_MCP_JAVA_OPTS"
 	IdleTimeoutKey   = "SONARLESS_IDLE_TIMEOUT"
 	ProjectKey       = "SONARLESS_PROJECT_KEY"
 	ProjectName      = "SONARLESS_PROJECT_NAME"
@@ -64,6 +65,7 @@ var Keys = []Key{
 	{Name: MCPImage, Default: "sonarsource/sonarqube-mcp:latest", Help: "SonarQube MCP server image"},
 	{Name: MCPToolsets, Help: "comma-separated MCP toolsets to enable (server default when empty)"},
 	{Name: MCPReadOnly, Default: "false", Help: "disable MCP write tools"},
+	{Name: MCPJavaOpts, Default: "-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k", Help: "JVM options of the shared MCP server (JAVA_TOOL_OPTIONS); a small heap and C1-only JIT keep it near 200 MiB; none leaves the JVM defaults"},
 	{Name: IdleTimeoutKey, Default: "30m", Help: "stop server+MCP after this long unused; 0 disables"},
 	{Name: WebHeap, Default: "256m", Help: "max Java heap of SonarQube's web server (SonarQube's own default is 512m)"},
 	{Name: CEHeap, Default: "384m", Help: "max Java heap of SonarQube's compute engine, which processes scan reports; raise it if big projects fail with OutOfMemoryError (SonarQube's own: 512m)"},
