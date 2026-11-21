@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BrainerVirus/sonarless-mcp/internal/clients"
+	"github.com/BrainerVirus/sonarless-mcp/internal/config"
 	"github.com/BrainerVirus/sonarless-mcp/internal/docker"
 	"github.com/BrainerVirus/sonarless-mcp/internal/tui"
 	"github.com/spf13/cobra"
@@ -16,14 +18,21 @@ import (
 )
 
 func setupCommand() *cobra.Command {
-	var yes, remove, list bool
+	var yes, remove, list, stdio bool
 	var only []string
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Register sonarless-mcp in your AI clients (detects what's installed)",
 		Long: `Detect Claude Code, Cursor, opencode, VS Code and Codex, and register the
-"sonarqube" MCP server (backed by "sonarless-mcp mcp") in the ones you pick.
-Installed clients are preselected. With --remove, unregister instead.
+"sonarqube" MCP server in the ones you pick. Installed clients are preselected.
+With --remove, unregister instead.
+
+Clients that can reach the shared gateway ("sonarless-mcp serve") over HTTP are
+pointed at it directly, so no per-client process runs: Claude Code always (its
+headersHelper starts the gateway), opencode once the gateway starts at login
+(systemd user unit or LaunchAgent, installed here), Cursor and Codex also once
+SONARLESS_MCP_TOKEN holds the gateway token in your shell. The others, and
+every client with --stdio, launch the stdio bridge "sonarless-mcp mcp".
 
 Non-interactive: --list shows what was found without changing anything; --yes
 picks every detected client (or every configured one with --remove);
@@ -99,9 +108,9 @@ picks every detected client (or every configured one with --remove);
 			}
 
 			var failed []string
-			for _, id := range chosen {
-				c := byID[id]
-				if remove {
+			if remove {
+				for _, id := range chosen {
+					c := byID[id]
 					if err := c.Remove(env); err != nil {
 						fmt.Printf("  ✗ %-12s %v\n", c.Label, err)
 						failed = append(failed, c.Label)
@@ -109,26 +118,63 @@ picks every detected client (or every configured one with --remove);
 					}
 					_ = c.RemoveSkill(env)
 					fmt.Printf("  ✓ %-12s removed from %s\n", c.Label, c.Where(env))
-					continue
 				}
-				name, err := c.Register(env, exe)
+				if stillUsed := slices.ContainsFunc(all, func(c clients.Client) bool { return c.Configured(env) }); !stillUsed {
+					removeGateway(env)
+				}
+			} else {
+				cfg, _, err := config.Load("")
 				if err != nil {
-					fmt.Printf("  ✗ %-12s %v\n", c.Label, err)
-					failed = append(failed, c.Label)
-					continue
+					return err
 				}
-				note := ""
-				if name != clients.ServerName {
-					note = fmt.Sprintf(" (your existing %q server was left as is)", clients.ServerName)
+				token, err := cfg.GatewayToken()
+				if err != nil {
+					return err
 				}
-				fmt.Printf("  ✓ %-12s registered as %q in %s%s\n", c.Label, name, c.Where(env), note)
-				if f, err := c.InstallSkill(env); err != nil {
-					fmt.Printf("    (skill not installed: %v)\n", err)
-				} else if f != "" {
-					fmt.Printf("    + skill %s\n", f)
+				picked := make([]clients.Client, len(chosen))
+				for i, id := range chosen {
+					picked[i] = byID[id]
 				}
-			}
-			if !remove {
+				results, autostart := clients.Setup(env, picked, clients.SetupOptions{
+					Exe: exe, Direct: gatewayDirect(cfg, exe), Stdio: stdio,
+					EnvToken:   os.Getenv(config.GatewayTokenEnv) == token,
+					GatewayEnv: gatewayEnv(), LogFile: gatewayLog(cfg),
+				})
+				envMissing := false
+				for _, r := range results {
+					c := r.Client
+					if r.Err != nil {
+						fmt.Printf("  ✗ %-12s %v\n", c.Label, r.Err)
+						failed = append(failed, c.Label)
+						continue
+					}
+					how := "stdio bridge (`sonarless-mcp mcp`)"
+					if r.Direct {
+						how = "direct HTTP to the gateway"
+					}
+					note := ""
+					if r.Name != clients.ServerName {
+						note = fmt.Sprintf(" (your existing %q server was left as is)", clients.ServerName)
+					}
+					fmt.Printf("  ✓ %-12s registered as %q in %s: %s%s\n", c.Label, r.Name, c.Where(env), how, note)
+					if r.Why != "" {
+						fmt.Printf("    (kept the stdio bridge: %s)\n", r.Why)
+						envMissing = envMissing || r.NeedsEnv
+					}
+					if f, err := c.InstallSkill(env); err != nil {
+						fmt.Printf("    (skill not installed: %v)\n", err)
+					} else if f != "" {
+						fmt.Printf("    + skill %s\n", f)
+					}
+				}
+				if autostart != "" {
+					fmt.Printf("\nThe gateway (%s) starts at login: %s\n", cfg.GatewayURL(), autostart)
+				}
+				if envMissing && clients.AutostartSupported(env) {
+					fmt.Printf("\nTo connect Cursor/Codex directly too, export the gateway token in your shell profile\n"+
+						"(~/.bashrc, ~/.zshrc, ...), open a new terminal and re-run `sonarless-mcp setup`:\n"+
+						"  export %s=\"$(cat %s)\"\n", config.GatewayTokenEnv, shellQuote(cfg.GatewayTokenFile()))
+				}
 				fmt.Println("\nRestart the clients to load it. The first tool call pulls the SonarQube images (a few GB);")
 				fmt.Println("run `sonarless-mcp start` now to get that out of the way.")
 				if err := docker.Available(context.Background()); err != nil {
@@ -145,6 +191,7 @@ picks every detected client (or every configured one with --remove);
 	cmd.Flags().StringSliceVar(&only, "clients", nil, "no picker: these clients (claude,cursor,opencode,vscode,codex)")
 	cmd.Flags().BoolVar(&remove, "remove", false, "unregister instead of register")
 	cmd.Flags().BoolVar(&list, "list", false, "only show which clients are detected/configured; change nothing")
+	cmd.Flags().BoolVar(&stdio, "stdio", false, "register the stdio bridge (`sonarless-mcp mcp`) everywhere instead of direct HTTP")
 	return cmd
 }
 

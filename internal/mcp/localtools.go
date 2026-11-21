@@ -51,7 +51,7 @@ func (s *Shim) withLocalTools(result json.RawMessage) json.RawMessage {
 
 // runLocal answers a tools/call for a local tool. Local tools don't need the
 // SonarQube MCP container, so they work even while it is starting or down.
-func (s *Shim) runLocal(ctx context.Context, req message, t *LocalTool) {
+func (s *Shim) runLocal(ctx context.Context, out func(message), req message, t *LocalTool) {
 	var p struct {
 		Arguments map[string]any `json:"arguments"`
 	}
@@ -64,5 +64,5 @@ func (s *Shim) runLocal(ctx context.Context, req message, t *LocalTool) {
 		"isError": isErr,
 		"content": []map[string]string{{"type": "text", "text": text}},
 	})
-	s.send(message{JSONRPC: "2.0", ID: req.ID, Result: res})
+	out(message{JSONRPC: "2.0", ID: req.ID, Result: res})
 }

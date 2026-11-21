@@ -28,6 +28,10 @@ import (
 // answering from cache; MCP clients often give up on servers after ~30s.
 const cacheWait = 3 * time.Second
 
+// statelessWait is cacheWait for HTTP clients, which can not be told later
+// that the tool list changed; it stays under Codex's 10s startup timeout.
+var statelessWait = 8 * time.Second
+
 // Backend is one SonarQube server reachable through its own shared MCP
 // container: the local server, or a configured remote one.
 type Backend struct {
@@ -137,6 +141,12 @@ type Shim struct {
 	Local    []LocalTool // sonarless-mcp's own tools, answered by the shim
 	Project  *project.Project
 	Log      io.Writer
+	// Stateless: served over HTTP by the gateway, with no stream to push
+	// tools/list_changed on; a cold start waits longer before answering degraded.
+	Stateless bool
+	// notify receives server-initiated messages (tools/list_changed) when there
+	// is no stdout: the gateway forwards them on its GET event streams.
+	notify func(message)
 
 	http         *http.Client
 	out          io.Writer
@@ -175,9 +185,8 @@ func (s *Shim) backend(name string) *Backend {
 	return nil
 }
 
-// Run serves MCP on in/out until in closes.
-func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
-	s.out = out
+// start boots the default backend in the background; handle waits on it.
+func (s *Shim) start(ctx context.Context) {
 	s.http = &http.Client{} // tool calls (e.g. analysis) can be slow; rely on ctx
 	s.booted = make(chan struct{})
 	go func() {
@@ -186,6 +195,12 @@ func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 		close(s.booted)
 		s.afterBoot(err)
 	}()
+}
+
+// Run serves MCP on in/out until in closes.
+func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
+	s.out = out
+	s.start(ctx)
 
 	r := bufio.NewReaderSize(in, 1<<20)
 	var wg sync.WaitGroup
@@ -197,7 +212,7 @@ func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 				s.send(message{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32700, "parse error: " + jerr.Error()}})
 			} else if msg.Method != "" { // responses from the client: stateless server never asks
 				wg.Add(1)
-				go func() { defer wg.Done(); s.handle(ctx, msg) }()
+				go func() { defer wg.Done(); s.handle(ctx, msg, s.send) }()
 			}
 		}
 		if err != nil {
@@ -210,14 +225,18 @@ func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 	}
 }
 
-func (s *Shim) handle(ctx context.Context, msg message) {
+func (s *Shim) handle(ctx context.Context, msg message, out func(message)) {
 	s.touch()
 	switch msg.Method {
 	case "initialize", "tools/list":
-		booted := s.waitBooted(ctx, cacheWait) == nil
+		wait := cacheWait
+		if s.Stateless {
+			wait = statelessWait
+		}
+		booted := s.waitBooted(ctx, wait) == nil
 		if !booted || s.bootErr != nil { // bootErr is only read once booted is closed
 			if cached := s.cached(msg.Method); cached != nil {
-				s.reply(msg, cached)
+				s.reply(out, msg, cached)
 				return
 			}
 			// Nothing cached and SonarQube is still starting or can't start
@@ -227,8 +246,11 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 			if booted {
 				reason = "SonarQube is not available right now: " + s.bootErr.Error()
 			}
+			if s.Stateless {
+				reason += " If they don't appear by themselves, reconnect this MCP server (e.g. /mcp in Claude Code) once it is up."
+			}
 			s.degradedSent.Store(true)
-			s.reply(msg, s.degraded(msg, reason))
+			s.reply(out, msg, s.degraded(msg, reason))
 			return
 		}
 	}
@@ -238,7 +260,7 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 		}
 		_ = json.Unmarshal(msg.Params, &p)
 		if t := s.localTool(p.Name); t != nil {
-			s.runLocal(ctx, msg, t)
+			s.runLocal(ctx, out, msg, t)
 			return
 		}
 	}
@@ -257,9 +279,9 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 		if target, msg.Params, err = s.route(ctx, msg.Params); err != nil {
 			var te toolError
 			if errors.As(err, &te) {
-				s.toolFailure(msg, te.Error())
+				s.toolFailure(out, msg, te.Error())
 			} else {
-				s.send(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32602, "sonarless-mcp: " + err.Error()}})
+				out(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32602, "sonarless-mcp: " + err.Error()}})
 			}
 			return
 		}
@@ -267,9 +289,9 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 	replies, err := s.forward(ctx, target, msg)
 	if err != nil {
 		if msg.Method == "tools/call" {
-			s.toolFailure(msg, err.Error())
+			s.toolFailure(out, msg, err.Error())
 		} else {
-			s.send(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32603, "sonarless-mcp: " + err.Error()}})
+			out(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32603, "sonarless-mcp: " + err.Error()}})
 		}
 		return
 	}
@@ -288,14 +310,14 @@ func (s *Shim) handle(ctx context.Context, msg message) {
 				r.Result = s.annotateTools(r.Result)
 			}
 		}
-		s.send(r)
+		out(r)
 	}
 	if !answered { // empty/garbled body or a 202 to a request: never leave the client waiting
 		const why = "the SonarQube MCP server returned no answer for this request"
 		if msg.Method == "tools/call" {
-			s.toolFailure(msg, why)
+			s.toolFailure(out, msg, why)
 		} else {
-			s.send(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32603, "sonarless-mcp: " + why}})
+			out(message{JSONRPC: "2.0", ID: msg.ID, Error: &rpcError{-32603, "sonarless-mcp: " + why}})
 		}
 	}
 }
@@ -346,12 +368,12 @@ func (s *Shim) route(ctx context.Context, params json.RawMessage) (*Backend, jso
 type toolError struct{ error }
 
 // toolFailure answers a tools/call with an MCP tool error result.
-func (s *Shim) toolFailure(req message, text string) {
+func (s *Shim) toolFailure(out func(message), req message, text string) {
 	res, _ := json.Marshal(map[string]any{
 		"isError": true,
 		"content": []map[string]string{{"type": "text", "text": "sonarless-mcp: " + text}},
 	})
-	s.send(message{JSONRPC: "2.0", ID: req.ID, Result: res})
+	out(message{JSONRPC: "2.0", ID: req.ID, Result: res})
 }
 
 func (s *Shim) names() []string {
@@ -533,18 +555,24 @@ func (s *Shim) degraded(req message, reason string) json.RawMessage {
 	return b
 }
 
-func (s *Shim) reply(req message, result json.RawMessage) {
+func (s *Shim) reply(out func(message), req message, result json.RawMessage) {
 	switch req.Method {
 	case "initialize":
 		result = s.annotateInitialize(result)
 	case "tools/list":
 		result = s.annotateTools(result)
 	}
-	s.send(message{JSONRPC: "2.0", ID: req.ID, Result: result})
+	out(message{JSONRPC: "2.0", ID: req.ID, Result: result})
 }
 
 func (s *Shim) send(m message) {
 	m.JSONRPC = "2.0"
+	if s.out == nil { // HTTP (gateway): push on its event streams, if any
+		if s.notify != nil {
+			s.notify(m)
+		}
+		return
+	}
 	b, err := json.Marshal(m)
 	if err != nil {
 		return

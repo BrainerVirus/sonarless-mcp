@@ -16,7 +16,7 @@ Codex — at once. Single binary for Linux, macOS and Windows.
 | | sonarless | sonarless-mcp |
 |---|---|---|
 | Runs on | bash + jq + curl (Linux/macOS) | single Go binary (Linux/macOS/Windows) |
-| MCP | — | `sonarless-mcp mcp`: one shared MCP container for all clients, project key filled in per workspace |
+| MCP | — | one shared MCP container for all clients, reached directly over HTTP through one gateway (or a stdio bridge), project key filled in per workspace |
 | Project key | directory name | `sonar-project.properties`, `.sonarcloud.properties`, Maven, Gradle (Groovy/Kotlin), `pyproject.toml`, .NET, CI pipelines, `package.json` |
 | Scanner | sonar-scanner CLI | CLI, Maven, Gradle or dotnet-sonarscanner, picked per project |
 | Resources | server runs until stopped | stops itself after 30 min unused, resumes on next use |
@@ -88,8 +88,8 @@ Requires Docker (Docker Desktop on macOS/Windows).
 
 ## Updating
 
-Installed binaries keep themselves current: once a day, starting the MCP shim,
-`start` or `scan` checks GitHub Releases in the background, downloads a newer
+Installed binaries keep themselves current: once a day, the gateway, starting the MCP bridge,
+`start` or `scan` check GitHub Releases in the background, downloads a newer
 release, verifies its checksum, smoke-tests it and swaps it in, so the next
 start runs it. The same check pulls the latest SonarQube MCP image, which the
 shared container picks up the next time it starts from stopped (never mid-session).
@@ -99,7 +99,7 @@ daily check off. Log: `<cache dir>/sonarless-mcp/update.log`.
 ## Use with AI agents
 
 `sonarless-mcp setup` registers a `sonarqube` MCP server in each client
-(Claude Code via `claude mcp add`, Cursor `~/.cursor/mcp.json`, opencode
+(Claude Code via `claude mcp add-json`, Cursor `~/.cursor/mcp.json`, opencode
 `opencode.json`, VS Code user `mcp.json`, Codex `config.toml`), editing only
 that entry. If a client already has a different `sonarqube` server (say, your
 company's remote SonarQube), it is left untouched and sonarless-mcp registers as
@@ -109,23 +109,62 @@ snippet.
 How it works:
 
 ```
-Claude Code ─┐                      ┌──────────────────────────┐   ┌──────────────┐
-Cursor ──────┼─ sonarless-mcp mcp ──▶ sonarless-mcp container  ├──▶│ SonarQube    │
-opencode ────┘  (tiny stdio shim,   │ (SonarQube MCP, HTTP,    │   │ (one server) │
-                 one per client)    │  127.0.0.1:9235)         │   └──────────────┘
-                                    └──────────────────────────┘
+Claude Code ─┐  direct HTTP        ┌───────────────────────┐   ┌──────────────────────────┐   ┌──────────────┐
+Cursor ──────┼────────────────────▶│ sonarless-mcp gateway │──▶│ sonarless-mcp container  ├──▶│ SonarQube    │
+opencode ────┤                     │ (one per machine,     │   │ (SonarQube MCP, HTTP,    │   │ (one server) │
+Codex ───────┤                     │  127.0.0.1:9233)      │   │  127.0.0.1:9235)         │   └──────────────┘
+VS Code ─────┘                     └───────────────────────┘   │                          │
+(--stdio or unmet needs: sonarless-mcp mcp, one per session) ─▶└──────────────────────────┘
 ```
 
-- Each client runs a few-MB shim instead of its own Java MCP container.
-- The shim starts or resumes the shared containers, keeps one token valid
-  (regenerated under a lock, so clients never revoke each other's), and
-  answers `initialize`/`tools/list` from cache during a cold start so clients
-  don't time out.
+- Clients that speak Streamable HTTP connect to one gateway (`sonarless-mcp
+  serve`, ~10 MB) instead of each launching a process. The gateway does what
+  the stdio bridge does, per workspace: the client sends its directory in an
+  `X-Sonarless-Workspace` header, so `projectKey` defaults and the `sonarless_*`
+  tools work as before.
+- The gateway only answers with the token in `<config dir>/mcp-gateway-token`
+  (created by setup, readable only by you), and refuses requests from web pages
+  (`Origin`/`Host` checks). Client configs reference the token instead of
+  holding it:
+
+  | Client | Entry | Token from | Workspace from | Gateway started by |
+  |---|---|---|---|---|
+  | Claude Code | `type: http` | `headersHelper`: `sonarless-mcp ensure --headers` | the helper: Claude Code's working directory (not `${PWD}`, which is stale when Claude starts from a GUI) | that same helper, before each connection |
+  | opencode | `type: remote`, `oauth: false` (2.x under `mcp.servers`, 1.x under `mcp`) | `{file:<token file>}` | `{env:PWD}` | login autostart |
+  | Cursor | `url` + `headers` | `${env:SONARLESS_MCP_TOKEN}` | `${workspaceFolder}` | login autostart |
+  | VS Code | `type: http` in the user `mcp.json` | `${env:SONARLESS_MCP_TOKEN}` | `${workspaceFolder}` | login autostart |
+  | Codex | `url` + `bearer_token_env_var` | `SONARLESS_MCP_TOKEN` | `env_http_headers` → `PWD` | login autostart |
+
+  `setup --remove`, once no client uses the gateway any more, removes the
+  autostart and stops a running gateway (it records its pid in the cache dir;
+  the pid is only stopped if it still runs `sonarless-mcp serve`).
+  Login autostart is a systemd user unit (`~/.config/systemd/user/sonarless-mcp-gateway.service`)
+  on Linux, a LaunchAgent on macOS, and on Windows a per-user Run key (no admin)
+  that starts `%AppData%\sonarless-mcp\gateway-autostart.vbs` through `wscript`,
+  so no console window shows. Setup installs it when a chosen client needs it.
+  Cursor, VS Code and Codex can only read the token from the environment:
+  add `export SONARLESS_MCP_TOKEN="$(cat <token file>)"` to your shell profile
+  (setup prints the exact line), open a new terminal and re-run setup. Until a
+  client's requirement is met (or if the autostart can't be installed), setup
+  registers the stdio bridge for it and says why.
+  `setup --stdio` uses the bridge everywhere.
+- Containers start (or resume) on the first request, through the gateway or
+  the bridge: nothing needs to be running when a client connects. If Docker
+  itself is down, the agent sees `sonarless_status` and a "not available"
+  note instead of the SonarQube tools.
+- Tokens are kept valid (regenerated under a lock, so clients never revoke each
+  other's), and `initialize`/`tools/list` are answered from cache during a cold
+  start so clients don't time out. A client connecting for the very first time
+  while SonarQube is still starting sees only the `sonarless_*` tools and is
+  told (`notifications/tools/list_changed`) when the rest appear: on stdout by
+  the bridge, on the gateway's GET event stream for direct clients. A direct
+  client that never opens that stream picks them up on its next connection.
 - Tools that take a `projectKey` default to the workspace's project (only when
   that project exists on the server), and the agent is told which project it is.
-- After `SONARLESS_IDLE_TIMEOUT` (default 30m) without MCP calls, scans or web
-  UI traffic, a background watcher stops both containers. The next request
-  resumes them, history intact.
+- After `SONARLESS_IDLE_TIMEOUT` (default 30m) without MCP calls (gateway or
+  bridge), scans or web UI traffic, a background watcher stops both containers.
+  The next request resumes them, history intact. The gateway itself keeps
+  running; it restarts itself when the binary updates.
 
 ## What agents get
 
@@ -247,6 +286,7 @@ SONARLESS_IDLE_TIMEOUT=30m
 | `SONARLESS_SERVER_PORT` | `9234` | web UI/API port (127.0.0.1) |
 | `SONARLESS_ADMIN_USER` / `SONARLESS_ADMIN_PASS` | `admin` / `admin` | local admin |
 | `SONARLESS_MCP_PORT` / `SONARLESS_MCP_IMAGE` | `9235` / `sonarsource/sonarqube-mcp:latest` | shared MCP server |
+| `SONARLESS_GATEWAY_PORT` | `9233` | gateway that HTTP clients connect to (127.0.0.1); re-run `setup` after changing it |
 | `SONARLESS_MCP_TOOLSETS` / `SONARLESS_MCP_READ_ONLY` | server defaults / `false` | passed to the MCP server |
 | `SONARLESS_MCP_JAVA_OPTS` | `-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k` | JVM options of the shared MCP server (`JAVA_TOOL_OPTIONS`); about 200 MiB instead of ~300 with the same tool latency; `none` keeps the JVM defaults |
 | `SONARLESS_IDLE_TIMEOUT` | `30m` | `0` keeps everything running |

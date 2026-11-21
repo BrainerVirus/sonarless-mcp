@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -29,7 +30,11 @@ type Client struct {
 	Detected   func(env Env) bool
 	Configured func(env Env) bool
 	Register   func(env Env, exe string) (name string, err error)
-	Remove     func(env Env) error
+	// Direct says what the client needs to reach the gateway over HTTP;
+	// RegisterDirect (nil for ShimOnly) writes that entry instead of the shim.
+	Direct         Needs
+	RegisterDirect func(env Env, d Direct) (name string, err error)
+	Remove         func(env Env) error
 	// Where says which file or command a change goes to.
 	Where func(env Env) string
 }
@@ -185,6 +190,14 @@ func claude() Client {
 			_, err := e.Run("claude", "mcp", "add", "-s", "user", name, "--", exe, "mcp")
 			return name, err
 		},
+		Direct: DirectHook,
+		RegisterDirect: func(e Env, d Direct) (string, error) {
+			name := pickName(entry(e))
+			j, _ := json.Marshal(ClaudeDirect(d))
+			_, _ = e.Run("claude", "mcp", "remove", "-s", "user", name)
+			_, err := e.Run("claude", "mcp", "add-json", "-s", "user", name, string(j))
+			return name, err
+		},
 		Remove: func(e Env) error {
 			for _, n := range names {
 				if out, ok := entry(e)(n); ok && ours(out) {
@@ -200,42 +213,60 @@ func claude() Client {
 }
 
 // jsonClient wires a client whose MCP servers live in one JSON object.
-func jsonClient(id, label string, file func(Env) string, section string, detected func(Env) bool, value func(exe string) map[string]any) Client {
+// sections(e)[0] is where entries are written; every section is checked
+// for (and cleaned of) entries an older layout left behind.
+func jsonClient(id, label string, file func(Env) string, sections func(Env) []string, detected func(Env) bool,
+	value func(e Env, exe string) map[string]any, needs Needs, direct func(e Env, d Direct) map[string]any) Client {
 	entry := func(e Env) func(string) (string, bool) {
-		return func(name string) (string, bool) { return jsonEntry(file(e), section, name) }
+		return func(name string) (string, bool) { return jsonEntry(file(e), sections(e)[0], name) }
 	}
-	return Client{
-		ID: id, Label: label, Detected: detected, Where: file,
+	c := Client{
+		ID: id, Label: label, Detected: detected, Where: file, Direct: needs,
 		Configured: func(e Env) bool {
-			for _, n := range names {
-				if v, ok := entry(e)(n); ok && ours(v) {
-					return true
+			for _, s := range sections(e) {
+				for _, n := range names {
+					if v, ok := jsonEntry(file(e), s, n); ok && ours(v) {
+						return true
+					}
 				}
 			}
 			return false
 		},
 		Register: func(e Env, exe string) (string, error) {
 			name := pickName(entry(e))
-			return name, jsonSet(file(e), section, name, value(exe))
+			return name, jsonSet(file(e), sections(e)[0], name, value(e, exe))
 		},
 		Remove: func(e Env) error {
-			for _, n := range names {
-				if v, ok := entry(e)(n); ok && ours(v) {
-					if err := jsonDelete(file(e), section, n); err != nil {
-						return err
+			for _, s := range sections(e) {
+				for _, n := range names {
+					if v, ok := jsonEntry(file(e), s, n); ok && ours(v) {
+						if err := jsonDelete(file(e), s, n); err != nil {
+							return err
+						}
 					}
 				}
 			}
 			return nil
 		},
 	}
+	if direct != nil {
+		c.RegisterDirect = func(e Env, d Direct) (string, error) {
+			name := pickName(entry(e))
+			return name, jsonSet(file(e), sections(e)[0], name, direct(e, d))
+		}
+	}
+	return c
+}
+
+func static(section string) func(Env) []string {
+	return func(Env) []string { return []string{section} }
 }
 
 // --- Cursor: ~/.cursor/mcp.json ---
 
 func cursor() Client {
 	return jsonClient("cursor", "Cursor",
-		func(e Env) string { return filepath.Join(e.Home, ".cursor", "mcp.json") }, "mcpServers",
+		func(e Env) string { return filepath.Join(e.Home, ".cursor", "mcp.json") }, static("mcpServers"),
 		func(e Env) bool {
 			switch e.GOOS {
 			case "darwin":
@@ -253,32 +284,69 @@ func cursor() Client {
 			}
 			return e.has("cursor")
 		},
-		func(exe string) map[string]any {
+		func(_ Env, exe string) map[string]any {
 			return map[string]any{"command": exe, "args": []string{"mcp", "${workspaceFolder}"}}
-		})
+		}, DirectAutostartEnv, func(_ Env, d Direct) map[string]any { return CursorDirect(d) })
 }
 
 // --- opencode: ~/.config/opencode/opencode.json ---
 
 func opencode() Client {
 	return jsonClient("opencode", "opencode",
-		func(e Env) string {
-			if x := os.Getenv("XDG_CONFIG_HOME"); x != "" && e.GOOS != "windows" {
-				return filepath.Join(x, "opencode", "opencode.json")
+		opencodeFile,
+		func(e Env) []string {
+			if opencodeV2(e) {
+				return []string{"mcp.servers", "mcp"}
 			}
-			return filepath.Join(e.Home, ".config", "opencode", "opencode.json")
-		}, "mcp",
+			return []string{"mcp"}
+		},
 		func(e Env) bool { return e.has("opencode") },
-		func(exe string) map[string]any {
-			return map[string]any{"type": "local", "enabled": true, "command": []string{exe, "mcp"}}
-		})
+		func(e Env, exe string) map[string]any {
+			v := map[string]any{"type": "local", "command": []string{exe, "mcp"}}
+			if !opencodeV2(e) {
+				v["enabled"] = true
+			}
+			return v
+		}, DirectAutostart, func(e Env, d Direct) map[string]any { return OpencodeDirect(d, opencodeV2(e)) })
+}
+
+func opencodeFile(e Env) string {
+	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" && e.GOOS != "windows" {
+		return filepath.Join(x, "opencode", "opencode.json")
+	}
+	return filepath.Join(e.Home, ".config", "opencode", "opencode.json")
+}
+
+// opencodeV2 reports whether opencode uses its v2 layout: servers under
+// `mcp.servers` (not directly under `mcp`) and `disabled` (no `enabled`).
+// The config file decides when it says; otherwise the installed version.
+func opencodeV2(e Env) bool {
+	if obj, err := readObject(opencodeFile(e)); err == nil {
+		if mcp, ok := getPath(obj, []string{"mcp"}); ok {
+			if _, ok := get(mcp, "servers"); ok {
+				return true
+			}
+			if len(mcp) > 0 {
+				return false // v1 entries straight under mcp
+			}
+		}
+	}
+	out, err := e.Run("opencode", "--version")
+	if err != nil {
+		return false
+	}
+	v := strings.TrimPrefix(strings.TrimSpace(out), "opencode ")
+	v = strings.TrimPrefix(v, "v")
+	major, _, _ := strings.Cut(v, ".")
+	n, err := strconv.Atoi(major)
+	return err == nil && n >= 2
 }
 
 // --- VS Code: user mcp.json ---
 
 func vscode() Client {
 	return jsonClient("vscode", "VS Code",
-		func(e Env) string { return filepath.Join(e.appData(), "Code", "User", "mcp.json") }, "servers",
+		func(e Env) string { return filepath.Join(e.appData(), "Code", "User", "mcp.json") }, static("servers"),
 		func(e Env) bool {
 			switch e.GOOS {
 			case "darwin":
@@ -292,9 +360,9 @@ func vscode() Client {
 			}
 			return e.has("code")
 		},
-		func(exe string) map[string]any {
+		func(_ Env, exe string) map[string]any {
 			return map[string]any{"type": "stdio", "command": exe, "args": []string{"mcp", "${workspaceFolder}"}}
-		})
+		}, DirectAutostartEnv, func(_ Env, d Direct) map[string]any { return VSCodeDirect(d) })
 }
 
 // --- Codex: ~/.codex/config.toml ---
@@ -336,6 +404,11 @@ func codex() Client {
 			q, _ := json.Marshal(exe) // TOML basic strings share JSON's escaping
 			block := header(name) + "\ncommand = " + string(q) + "\nargs = [\"mcp\"]\n"
 			return name, tomlReplace(file(e), header(name), block)
+		},
+		Direct: DirectAutostartEnv,
+		RegisterDirect: func(e Env, d Direct) (string, error) {
+			name := pickName(entry(e))
+			return name, tomlReplace(file(e), header(name), CodexDirect(name, d))
 		},
 		Remove: func(e Env) error {
 			for _, n := range names {
@@ -432,18 +505,50 @@ func readObject(file string) ([]kv, error) {
 	return obj, nil
 }
 
+// A section is a key, or a dotted path to a nested object ("mcp.servers").
+
+// getPath returns the object at path, if every level is an object.
+func getPath(obj []kv, path []string) ([]kv, bool) {
+	for _, k := range path {
+		v, ok := get(obj, k)
+		if !ok {
+			return nil, false
+		}
+		var err error
+		if obj, err = parseObject(v); err != nil {
+			return nil, false
+		}
+	}
+	return obj, true
+}
+
+// editPath replaces the object at path (created when missing) with f's result.
+func editPath(obj []kv, path []string, f func([]kv) []kv) ([]kv, error) {
+	if len(path) == 0 {
+		return f(obj), nil
+	}
+	var inner []kv
+	if v, ok := get(obj, path[0]); ok {
+		var err error
+		if inner, err = parseObject(v); err != nil {
+			return nil, fmt.Errorf("%q is not an object", path[0])
+		}
+	}
+	inner, err := editPath(inner, path[1:], f)
+	if err != nil {
+		return nil, err
+	}
+	return put(obj, path[0], encodeCompact(inner)), nil
+}
+
 // jsonEntry returns the raw JSON of section.name, if present.
 func jsonEntry(file, section, name string) (string, bool) {
 	obj, err := readObject(file)
 	if err != nil {
 		return "", false
 	}
-	sec, ok := get(obj, section)
+	inner, ok := getPath(obj, strings.Split(section, "."))
 	if !ok {
-		return "", false
-	}
-	inner, err := parseObject(sec)
-	if err != nil {
 		return "", false
 	}
 	v, ok := get(inner, name)
@@ -457,15 +562,11 @@ func jsonSet(file, section, name string, value any) error {
 	if err != nil {
 		return err
 	}
-	var inner []kv
-	if sec, ok := get(obj, section); ok {
-		if inner, err = parseObject(sec); err != nil {
-			return fmt.Errorf("%s: %q is not an object", file, section)
-		}
-	}
 	v, _ := json.Marshal(value)
-	inner = put(inner, name, v)
-	obj = put(obj, section, encodeCompact(inner))
+	obj, err = editPath(obj, strings.Split(section, "."), func(inner []kv) []kv { return put(inner, name, v) })
+	if err != nil {
+		return fmt.Errorf("%s: %v", file, err)
+	}
 	return writeFile(file, encodeObject(obj))
 }
 
@@ -474,21 +575,23 @@ func jsonDelete(file, section, name string) error {
 	if err != nil || obj == nil {
 		return err
 	}
-	sec, ok := get(obj, section)
-	if !ok {
+	if inner, ok := getPath(obj, strings.Split(section, ".")); !ok {
+		return nil
+	} else if _, ok := get(inner, name); !ok {
 		return nil
 	}
-	inner, err := parseObject(sec)
+	obj, err = editPath(obj, strings.Split(section, "."), func(inner []kv) []kv {
+		kept := inner[:0]
+		for _, e := range inner {
+			if e.Key != name {
+				kept = append(kept, e)
+			}
+		}
+		return kept
+	})
 	if err != nil {
 		return nil
 	}
-	kept := inner[:0]
-	for _, e := range inner {
-		if e.Key != name {
-			kept = append(kept, e)
-		}
-	}
-	obj = put(obj, section, encodeCompact(kept))
 	return writeFile(file, encodeObject(obj))
 }
 
@@ -597,7 +700,18 @@ func tomlReplace(file, header, block string) error {
 	return writeFile(file, []byte(s))
 }
 
-func writeFile(file string, b []byte) error {
+func writeFile(file string, b []byte) error { return writeFileMode(file, b, 0) }
+
+// writePrivateFile writes a file only its owner can read (0600), whatever
+// mode an existing copy had: autostart files can carry settings such as
+// SONARLESS_ADMIN_PASS. On Windows the mode is not enforced; the file lives
+// under %AppData%, which only its user can read.
+func writePrivateFile(file string, b []byte) error { return writeFileMode(file, b, 0o600) }
+
+// writeFileMode writes b to file through a temporary file. A zero force
+// keeps an existing file's mode (0644 for a new one); otherwise the file
+// gets force.
+func writeFileMode(file string, b []byte, force os.FileMode) error {
 	// Write through symlinks (dotfiles managers link configs into place):
 	// replacing the link with a file would detach it from the managed copy.
 	if real, err := filepath.EvalSymlinks(file); err == nil {
@@ -610,9 +724,18 @@ func writeFile(file string, b []byte) error {
 	if fi, err := os.Stat(file); err == nil {
 		mode = fi.Mode().Perm()
 	}
+	if force != 0 {
+		mode = force
+	}
 	tmp := file + ".sonarless-tmp"
 	if err := os.WriteFile(tmp, b, mode); err != nil {
 		return err
+	}
+	if force != 0 { // WriteFile's mode passes through the umask; a forced mode must not
+		if err := os.Chmod(tmp, mode); err != nil {
+			_ = os.Remove(tmp)
+			return err
+		}
 	}
 	return os.Rename(tmp, file)
 }
