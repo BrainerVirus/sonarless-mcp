@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.8.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.8.0...v0.8.1) (2026-11-21)
+
+### Bug Fixes
+
+* **deps:** go 1.27.4, bubbletea v2, scanner 12.4 and release tooling on node 26 ([#8](https://github.com/BrainerVirus/sonarless-mcp/issues/8)) ([d8e04a3](https://github.com/BrainerVirus/sonarless-mcp/commit/d8e04a31843bc37315fddf95c2bdbba89d2f7ef9))
+
 ## [0.8.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.7.0...v0.8.0) (2026-11-21)
 
 ### Features
