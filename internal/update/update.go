@@ -33,10 +33,6 @@ import (
 // IssuesURL is where a release that fails its checks should be reported.
 const IssuesURL = "https://github.com/" + Repo + "/issues"
 
-// NoticeEnv turns the terminal update notice off when set to "false", "0" or
-// "off".
-const NoticeEnv = "SONARLESS_UPDATE_NOTICE"
-
 // Enabled reports whether this build may upgrade itself in the background.
 func Enabled(cfg *config.Config, version string) bool {
 	return cfg.Bool(config.AutoUpdate) && IsRelease(version) && !strings.Contains(version, "SNAPSHOT")
@@ -52,7 +48,7 @@ func RunBinary(ctx context.Context, exe string, args ...string) ([]byte, error) 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, exe, args...) //nolint:gosec // exe is the verified sonarless-mcp binary
-	cmd.Env = append(os.Environ(), config.AutoUpdate+"=false", NoticeEnv+"=false")
+	cmd.Env = append(os.Environ(), config.AutoUpdate+"=false", config.UpdateNotice+"=false")
 	return cmd.CombinedOutput()
 }
 
