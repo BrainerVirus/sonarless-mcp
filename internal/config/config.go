@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,6 +48,9 @@ const (
 	MetricsFile      = "SONARLESS_METRICS_FILE"
 	AutoUpdate       = "SONARLESS_AUTO_UPDATE"
 	AgentTools       = "SONARLESS_MCP_AGENT_TOOLS"
+	WebHeap          = "SONARLESS_WEB_HEAP"
+	CEHeap           = "SONARLESS_CE_HEAP"
+	SearchHeap       = "SONARLESS_SEARCH_HEAP"
 )
 
 // Keys is the full list of supported settings.
@@ -61,6 +65,9 @@ var Keys = []Key{
 	{Name: MCPToolsets, Help: "comma-separated MCP toolsets to enable (server default when empty)"},
 	{Name: MCPReadOnly, Default: "false", Help: "disable MCP write tools"},
 	{Name: IdleTimeoutKey, Default: "30m", Help: "stop server+MCP after this long unused; 0 disables"},
+	{Name: WebHeap, Default: "256m", Help: "max Java heap of SonarQube's web server (SonarQube's own default is 512m)"},
+	{Name: CEHeap, Default: "384m", Help: "max Java heap of SonarQube's compute engine, which processes scan reports; raise it if big projects fail with OutOfMemoryError (SonarQube's own: 512m)"},
+	{Name: SearchHeap, Default: "256m", Help: "Java heap of SonarQube's Elasticsearch; it also maps index files outside the heap (SonarQube's own: 512m)"},
 	{Name: Instance, Default: "sonarless", Help: "prefix for the containers, network and volumes"},
 	{Name: AgentTools, Default: "true", Help: "expose sonarless_* tools (scan, status, project, remote sync) to agents next to the SonarQube tools"},
 	{Name: AutoUpdate, Default: "true", Help: "check daily for a new sonarless-mcp release and MCP image, installed on next start"},
@@ -157,6 +164,11 @@ func Load(projectRoot string) (*Config, []string, error) {
 
 	if _, err := c.IdleTimeout(); err != nil {
 		return nil, nil, err
+	}
+	for _, n := range []string{WebHeap, CEHeap, SearchHeap} {
+		if v := c.values[n]; v != "" && !heapSize.MatchString(v) {
+			return nil, nil, fmt.Errorf("%s=%q (from %s) is not a heap size such as 256m or 1g", n, v, c.sources[n])
+		}
 	}
 	for _, n := range []string{ServerPort, MCPPort} {
 		if _, err := strconv.Atoi(c.values[n]); err != nil {
@@ -310,4 +322,27 @@ func SortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(ks)
 	return ks
+}
+
+// heapSize is a Java -Xmx value: a positive number of megabytes or gigabytes.
+var heapSize = regexp.MustCompile(`^[1-9][0-9]*[mMgG]$`)
+
+// ServerJavaOpts are the SONAR_*_JAVAOPTS environment entries for the heaps
+// set in the config, each replacing SonarQube's own options for that process
+// (its defaults: web and compute engine -Xmx512m -Xms128m, Elasticsearch
+// -Xmx512m -Xms512m -XX:MaxDirectMemorySize=256m). sonarless sets smaller
+// defaults, measured on one scan (#2); each key raises its process again.
+func (c *Config) ServerJavaOpts() []string {
+	var out []string
+	if v := c.values[WebHeap]; v != "" {
+		out = append(out, "SONAR_WEB_JAVAOPTS=-Xmx"+v+" -Xms128m -XX:+HeapDumpOnOutOfMemoryError")
+	}
+	if v := c.values[CEHeap]; v != "" {
+		out = append(out, "SONAR_CE_JAVAOPTS=-Xmx"+v+" -Xms128m -XX:+HeapDumpOnOutOfMemoryError")
+	}
+	if v := c.values[SearchHeap]; v != "" {
+		// Elasticsearch wants its minimum and maximum heap equal.
+		out = append(out, "SONAR_SEARCH_JAVAOPTS=-Xmx"+v+" -Xms"+v+" -XX:MaxDirectMemorySize=256m -XX:+HeapDumpOnOutOfMemoryError")
+	}
+	return out
 }
