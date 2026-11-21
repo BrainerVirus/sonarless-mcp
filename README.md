@@ -316,7 +316,7 @@ SONARLESS_IDLE_TIMEOUT=30m
 | `SONARLESS_PLUGINS_DIR` | `<config dir>/plugins` | extra plugin jars (a `shellcheck` binary there is mounted into CLI scans) |
 | `SONARLESS_PROJECT_KEY` / `SONARLESS_PROJECT_NAME` | detected | per project |
 | `SONARLESS_SCANNER` / `SONARLESS_SCAN_TESTS` | auto / `false` | per project |
-| `SONARLESS_SOURCES` / `SONARLESS_SCANNER_IMAGE` / `SONARLESS_METRICS_FILE` | `.` / `sonarsource/sonar-scanner-cli:12.1` / `sonar-metrics.json` | per project |
+| `SONARLESS_SOURCES` / `SONARLESS_SCANNER_IMAGE` / `SONARLESS_METRICS_FILE` | `.` / `sonarsource/sonar-scanner-cli:12.4` / `sonar-metrics.json` | per project |
 
 ### About SonarQube versions
 
