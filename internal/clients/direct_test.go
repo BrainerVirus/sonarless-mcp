@@ -132,6 +132,9 @@ func TestSetupRegistersDirectEntries(t *testing.T) {
 	if autostart == "" {
 		t.Fatal("no autostart installed")
 	}
+	if fi, err := os.Stat(autostart); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("autostart file mode = %v (%v), want 0600: it can carry SONARLESS_ADMIN_PASS", fi.Mode().Perm(), err)
+	}
 	unit := read(t, autostart)
 	if !strings.Contains(unit, `ExecStart="/opt/bin/sonarless-mcp" serve`) || !strings.Contains(unit, "Restart=always") {
 		t.Errorf("unit:\n%s", unit)

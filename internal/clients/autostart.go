@@ -76,7 +76,7 @@ func InstallAutostart(e Env, exe, logFile string, env map[string]string) (string
 	case "darwin":
 		body = launchAgent(exe, logFile, env)
 	}
-	if err := writeFile(file, []byte(body)); err != nil {
+	if err := writePrivateFile(file, []byte(body)); err != nil {
 		return "", err
 	}
 	var err error

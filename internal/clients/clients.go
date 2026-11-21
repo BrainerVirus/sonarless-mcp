@@ -700,7 +700,17 @@ func tomlReplace(file, header, block string) error {
 	return writeFile(file, []byte(s))
 }
 
-func writeFile(file string, b []byte) error {
+func writeFile(file string, b []byte) error { return writeFileMode(file, b, 0) }
+
+// writePrivateFile writes a file only its owner can read (0600), whatever
+// mode an existing copy had: autostart files can carry settings such as
+// SONARLESS_ADMIN_PASS.
+func writePrivateFile(file string, b []byte) error { return writeFileMode(file, b, 0o600) }
+
+// writeFileMode writes b to file through a temporary file. A zero force
+// keeps an existing file's mode (0644 for a new one); otherwise the file
+// gets force.
+func writeFileMode(file string, b []byte, force os.FileMode) error {
 	// Write through symlinks (dotfiles managers link configs into place):
 	// replacing the link with a file would detach it from the managed copy.
 	if real, err := filepath.EvalSymlinks(file); err == nil {
@@ -713,8 +723,15 @@ func writeFile(file string, b []byte) error {
 	if fi, err := os.Stat(file); err == nil {
 		mode = fi.Mode().Perm()
 	}
+	if force != 0 {
+		mode = force
+	}
 	tmp := file + ".sonarless-tmp"
 	if err := os.WriteFile(tmp, b, mode); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, mode); err != nil { // WriteFile's mode passes through the umask
+		_ = os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, file)
