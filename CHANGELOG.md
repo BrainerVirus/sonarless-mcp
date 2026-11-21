@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.7.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.6.1...v0.7.0) (2026-11-21)
+
+### Features
+
+* **mcp:** one HTTP gateway per machine, clients connect directly instead of a shim each ([#6](https://github.com/BrainerVirus/sonarless-mcp/issues/6)) ([7b82fb0](https://github.com/BrainerVirus/sonarless-mcp/commit/7b82fb0783c338b4f3e9eb0a19934cb55d3b33ea))
+
 ## [0.6.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.6.0...v0.6.1) (2026-11-21)
 
 ### Performance Improvements
