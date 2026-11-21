@@ -100,3 +100,39 @@ func TestEnvFileQuirks(t *testing.T) {
 		}
 	}
 }
+
+func TestServerJavaOpts(t *testing.T) {
+	setup(t, WebHeap+"=256m\n"+SearchHeap+"=1G\n", "")
+	c, _, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(c.ServerJavaOpts(), "|")
+	want := "SONAR_WEB_JAVAOPTS=-Xmx256m -Xms128m -XX:+HeapDumpOnOutOfMemoryError|" +
+		"SONAR_CE_JAVAOPTS=-Xmx384m -Xms128m -XX:+HeapDumpOnOutOfMemoryError|" +
+		"SONAR_SEARCH_JAVAOPTS=-Xmx1G -Xms1G -XX:MaxDirectMemorySize=256m -XX:+HeapDumpOnOutOfMemoryError"
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+
+	// Defaults measured on one scan (sonarless-mcp#2): about 23% less memory, same scan time.
+	setup(t, "", "")
+	c, _, err = Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = strings.Join(c.ServerJavaOpts(), "|")
+	want = "SONAR_WEB_JAVAOPTS=-Xmx256m -Xms128m -XX:+HeapDumpOnOutOfMemoryError|" +
+		"SONAR_CE_JAVAOPTS=-Xmx384m -Xms128m -XX:+HeapDumpOnOutOfMemoryError|" +
+		"SONAR_SEARCH_JAVAOPTS=-Xmx256m -Xms256m -XX:MaxDirectMemorySize=256m -XX:+HeapDumpOnOutOfMemoryError"
+	if got != want {
+		t.Errorf("defaults: got  %s\nwant %s", got, want)
+	}
+
+	for _, bad := range []string{"256", "lots", "0m", "256m -Xss1m"} {
+		setup(t, CEHeap+"="+bad+"\n", "")
+		if _, _, err := Load(""); err == nil {
+			t.Errorf("%s=%q accepted", CEHeap, bad)
+		}
+	}
+}

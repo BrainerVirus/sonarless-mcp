@@ -46,12 +46,15 @@ func (s *Server) Admin() *Client {
 
 // spec hashes everything that requires recreating the container to change.
 func (s *Server) spec() string {
-	h := sha256.Sum256([]byte(strings.Join([]string{
+	parts := []string{
 		s.Cfg.ServerImage(),
 		s.Cfg.Get(config.ServerPort),
 		s.Cfg.Network(),
 		s.Cfg.PluginsDir(),
-	}, "\x00")))
+	}
+	// Heap options join the spec, so changing one recreates the container (data kept).
+	parts = append(parts, s.Cfg.ServerJavaOpts()...)
+	h := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(h[:8])
 }
 
@@ -140,6 +143,9 @@ func (s *Server) create(ctx context.Context) error {
 	}
 	if d := s.Cfg.PluginsDir(); d != "" {
 		args = append(args, "-v", d+":/opt/sonarqube/extensions/plugins")
+	}
+	for _, env := range s.Cfg.ServerJavaOpts() {
+		args = append(args, "-e", env)
 	}
 	args = append(args, s.Cfg.ServerImage())
 	_, err := docker.Run(ctx, args...)

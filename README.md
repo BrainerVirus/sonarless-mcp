@@ -249,6 +249,7 @@ SONARLESS_IDLE_TIMEOUT=30m
 | `SONARLESS_MCP_PORT` / `SONARLESS_MCP_IMAGE` | `9235` / `sonarsource/sonarqube-mcp:latest` | shared MCP server |
 | `SONARLESS_MCP_TOOLSETS` / `SONARLESS_MCP_READ_ONLY` | server defaults / `false` | passed to the MCP server |
 | `SONARLESS_IDLE_TIMEOUT` | `30m` | `0` keeps everything running |
+| `SONARLESS_WEB_HEAP` / `SONARLESS_CE_HEAP` / `SONARLESS_SEARCH_HEAP` | `256m` / `384m` / `256m` | Java heaps of SonarQube's web server, compute engine and Elasticsearch (SonarQube's own: 512m each); raise `SONARLESS_CE_HEAP` if a big project's report fails with OutOfMemoryError. Changing one recreates the server container; its data is kept |
 | `SONARLESS_INSTANCE` | `sonarless` | names the containers (`-server`, `-mcp`), network and volumes |
 | `SONARLESS_AUTO_UPDATE` | `true` | daily background update check (binary + MCP image) |
 | `SONARLESS_MCP_AGENT_TOOLS` | `true` | expose the `sonarless_*` tools to agents |
