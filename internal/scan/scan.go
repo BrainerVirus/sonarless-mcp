@@ -39,22 +39,20 @@ func Run(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.
 	defer stopKeepalive()
 	go idle.Keepalive(kctx, cfg)
 
-	if err := srv.Ensure(ctx); err != nil {
-		return err
-	}
-	_ = idle.EnsureWatcher(cfg)
-	token, err := srv.Token(ctx)
-	if err != nil {
-		return err
-	}
-	if err := srv.Admin().EnsureProject(ctx, p.Key, p.Name); err != nil {
-		return fmt.Errorf("create project %s: %w", p.Key, err)
-	}
-
 	scanner := opt.Scanner
 	if scanner == "" {
 		scanner = p.Build
 	}
+	// `status` lists the scan from now on, waiting for the server included;
+	// the deferred Done clears it on every way out.
+	rec, _ := idle.Register(cfg, idle.Proc{Kind: idle.KindScan, State: idle.ScanWaiting, Workspace: p.Root, Project: p.Key, Scanner: scanner})
+	defer rec.Done()
+
+	token, err := prepare(ctx, cfg, srv, p)
+	if err != nil {
+		return err
+	}
+	rec.Update(idle.ScanScanning)
 	fmt.Fprintf(opt.Out, "Scanning %s\n  project: %s (%s)\n  name:    %s\n  scanner: %s\n", p.Root, p.Key, p.KeySource, p.Name, scanner)
 
 	// sonarless-mcp waits for the report itself and reports the gate; a
@@ -82,6 +80,23 @@ func Run(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.
 		return fmt.Errorf("%s scan failed: %w", scanner, err)
 	}
 	return waitProcessed(ctx, cfg, srv, p.Key, opt.Out)
+}
+
+// prepare starts the server (or waits for it), and returns an analysis
+// token once the project exists there. A variable so tests can fake it.
+var prepare = func(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.Project) (string, error) {
+	if err := srv.Ensure(ctx); err != nil {
+		return "", err
+	}
+	_ = idle.EnsureWatcher(cfg)
+	token, err := srv.Token(ctx)
+	if err != nil {
+		return "", err
+	}
+	if err := srv.Admin().EnsureProject(ctx, p.Key, p.Name); err != nil {
+		return "", fmt.Errorf("create project %s: %w", p.Key, err)
+	}
+	return token, nil
 }
 
 func defineArgs(prefix string, props map[string]string) []string {

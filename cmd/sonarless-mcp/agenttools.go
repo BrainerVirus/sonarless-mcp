@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -41,9 +42,10 @@ func agentTools(e *env) []mcp.LocalTool {
 	tools := []mcp.LocalTool{
 		{
 			Name: "sonarless_status",
-			Description: "sonarless-mcp status: the local SonarQube and MCP containers, configured remote SonarQube " +
-				"servers (and whether they are reachable right now), idle auto-stop and version. Use it to diagnose " +
-				"problems or before suggesting remote changes.",
+			Description: "sonarless-mcp status: the local SonarQube and MCP containers and the remote MCP containers " +
+				"(with memory in use), the gateway and its workspace sessions, running stdio bridges and scans, " +
+				"configured remote SonarQube servers (and whether they are reachable right now), idle auto-stop and " +
+				"version. Use it to diagnose problems, before starting a scan, or before suggesting remote changes.",
 			Run: func(ctx context.Context, _ map[string]any) (string, bool) { return statusText(ctx, e), false },
 		},
 		{
@@ -85,22 +87,54 @@ func agentTools(e *env) []mcp.LocalTool {
 func statusText(ctx context.Context, e *env) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "sonarless-mcp %s\n", version)
-	if err := docker.Available(ctx); err != nil {
-		fmt.Fprintf(&b, "docker: %v\n", err)
-	} else {
-		for _, c := range []struct{ label, name, url string }{
-			{"local server", e.cfg.ServerContainer(), e.cfg.ServerURL()},
-			{"local mcp", e.cfg.MCPContainer(), e.cfg.MCPURL()},
-		} {
-			state := "not created yet (starts on first use)"
-			if ct, err := docker.Inspect(ctx, c.name); err == nil {
-				state = ct.Status
-			}
-			fmt.Fprintf(&b, "%s: %s (%s)\n", c.label, state, c.url)
-		}
+	r := collectStatus(ctx, e, docker.Available(ctx))
+	if r.Docker != "" {
+		fmt.Fprintf(&b, "docker: %s\n", r.Docker)
 	}
-	timeout, _ := e.cfg.IdleTimeout()
-	if timeout > 0 {
+	labels := map[string]string{"server": "local server", "mcp": "local mcp"}
+	for _, c := range r.Containers {
+		label := labels[c.Role]
+		if label == "" {
+			label = c.Role + " mcp " + c.Name
+		}
+		state := c.State
+		switch {
+		case state == "absent":
+			state = "not created yet (starts on first use)"
+		case c.Memory != "":
+			state += ", " + c.Memory + " memory"
+		}
+		if c.URL != "" {
+			state += " (" + c.URL + ")"
+		}
+		fmt.Fprintf(&b, "%s: %s\n", label, state)
+	}
+	if g := r.Gateway; !g.Running {
+		fmt.Fprintf(&b, "gateway: not running (port %d)\n", g.Port)
+	} else {
+		sessions := slices.Clone(g.Sessions)
+		slices.SortStableFunc(sessions, func(a, b mcp.GatewaySession) int { return b.LastRequest.Compare(a.LastRequest) })
+		ws := make([]string, len(sessions))
+		for i, s := range sessions {
+			ws[i] = fmt.Sprintf("%s (last request %s ago)", orNone(s.Workspace), since(s.LastRequest))
+		}
+		fmt.Fprintf(&b, "gateway: running on port %d, pid %d, up %s; %d session(s)", g.Port, g.PID, orDash(g.Uptime), len(ws))
+		if len(ws) > 0 {
+			b.WriteString(": " + strings.Join(capList(ws), "; "))
+		}
+		b.WriteString("\n")
+	}
+	bridges := make([]string, len(r.Shims))
+	for i, p := range r.Shims {
+		bridges[i] = fmt.Sprintf("pid %d %s", p.PID, orNone(p.Workspace))
+	}
+	fmt.Fprintf(&b, "stdio bridges: %d%s\n", len(bridges), listSuffix(bridges))
+	scans := make([]string, len(r.Scans))
+	for i, p := range r.Scans {
+		scans[i] = scanLine(p)
+	}
+	fmt.Fprintf(&b, "running scans: %d%s\n", len(scans), listSuffix(scans))
+	if timeout, _ := e.cfg.IdleTimeout(); timeout > 0 {
 		fmt.Fprintf(&b, "idle auto-stop: after %s unused (resumes on next use)\n", timeout)
 	}
 	rs, _ := remote.Load(e.cfg)
@@ -119,6 +153,31 @@ func statusText(ctx context.Context, e *env) string {
 	}
 	b.WriteString(secretsNote + "\n")
 	return b.String()
+}
+
+// listCap is how many sessions, bridges or scans the agent status names;
+// the rest are counted, so the tool result stays small on a busy machine.
+const listCap = 5
+
+func capList(items []string) []string {
+	if len(items) <= listCap {
+		return items
+	}
+	return append(slices.Clone(items[:listCap]), fmt.Sprintf("+%d more", len(items)-listCap))
+}
+
+func listSuffix(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(capList(items), "; ") + ")"
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }
 
 // probeRemotes checks all remotes in parallel with a short timeout.

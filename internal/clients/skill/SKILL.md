@@ -11,7 +11,7 @@ sonarless-mcp runs SonarQube locally (one shared server + one shared SonarQube M
 ## Tools you have
 
 - **SonarQube tools** (`search_sonar_issues_in_projects`, `get_project_quality_gate_status`, `get_component_measures`, `show_rule`, …). `projectKey` defaults to this workspace's project. If it doesn't (the tools still require `projectKey` and `sonarless_project`/`sonarless_scan` are missing, so your client did not send its workspace), run `sonarless-mcp project` in the workspace to get the key and pass it explicitly. Every tool takes an optional **`server`** argument: `local` (default — the working copy as last scanned) or a remote's name (what CI found, on the remote's default branch).
-- **sonarless_status** — local containers, remotes and whether they're reachable now.
+- **sonarless_status** — containers and their memory, the gateway and its sessions, running stdio bridges and scans (check it before starting a scan another session may already run), remotes and whether they're reachable now.
 - **sonarless_project** — detected project key/name, where they came from, which servers have the project.
 - **sonarless_scan** — scan the workspace locally (1–5 min) and get the quality gate. Run it after code changes; local results only update when you scan.
 - **sonarless_remote_sync** — copy a remote's quality gate, rule sets and new-code definition to the local server so local scans pass/fail like CI. Follow with `sonarless_scan`.
@@ -37,5 +37,6 @@ After adding/changing a remote, the AI client must be restarted to see it.
 - Remote "unreachable": the user is probably off the VPN/network; carry on with `local`.
 - Remote token rejected: user runs `sonarless-mcp remote update <name> --token`.
 - First call slow: SonarQube is starting (it stops itself after 30 min unused and resumes on demand).
+- What is running and how much memory it takes: `sonarless-mcp status` (`--json` for details: containers with memory, gateway sessions, stdio bridges, running scans). To free it all, the user runs `sonarless-mcp stop --all` (plain `stop` keeps the gateway).
 - Project not found on a server: scan it locally, or it isn't analyzed on that remote.
 - Terminal says `sonarless-mcp` not found right after install: `rehash` (zsh), `hash -r` (bash), or a new tab (Warp).

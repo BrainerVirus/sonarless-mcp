@@ -148,3 +148,37 @@ func Remove(ctx context.Context, name string) error {
 	}
 	return err
 }
+
+// Names lists the containers (running or not) that carry label (a
+// `key=value` filter).
+func Names(ctx context.Context, label string) ([]string, error) {
+	out, err := Run(ctx, "ps", "-a", "--filter", "label="+label, "--format", "{{.Names}}")
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(out), nil
+}
+
+// Memory returns the memory each running container uses now, as docker
+// prints it ("512MiB"), by container name. Names that aren't running are
+// left out.
+func Memory(ctx context.Context, names ...string) (map[string]string, error) {
+	mem := map[string]string{}
+	if len(names) == 0 {
+		return mem, nil
+	}
+	args := append([]string{"stats", "--no-stream", "--format", "{{.Name}}\t{{.MemUsage}}"}, names...)
+	out, err := Run(ctx, args...)
+	if err != nil {
+		return mem, err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		name, usage, ok := strings.Cut(strings.TrimSpace(line), "\t")
+		if !ok {
+			continue
+		}
+		used, _, _ := strings.Cut(usage, "/")
+		mem[name] = strings.TrimSpace(used)
+	}
+	return mem, nil
+}

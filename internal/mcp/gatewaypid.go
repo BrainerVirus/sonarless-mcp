@@ -3,21 +3,20 @@ package mcp
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/BrainerVirus/sonarless-mcp/internal/config"
+	"github.com/BrainerVirus/sonarless-mcp/internal/idle"
 )
 
 // The running gateway records itself in the cache dir so `setup --remove`
-// can stop it where no service manager does (Windows, or a gateway Claude
-// Code's helper started). Before stopping, the pid is checked to still be
-// a sonarless-mcp gateway: a pid the OS reused is never touched.
+// and `stop --all` can stop it where no service manager does (Windows, or a
+// gateway Claude Code's helper started), and `status` can show it. Before
+// stopping, the pid is checked to still be a sonarless-mcp gateway: a pid
+// the OS reused is never touched.
 
 type gatewayPID struct {
 	PID     int       `json:"pid"`
@@ -66,46 +65,12 @@ func StopGateway(cfg *config.Config) (bool, error) {
 	return true, terminate(p.PID)
 }
 
-// isGateway reports whether a command line runs `<exe> serve` (same binary
-// name; Windows names compare case-insensitively).
-func isGateway(cmdline, exe string) bool {
-	f := strings.Fields(cmdline)
-	if len(f) < 2 || f[len(f)-1] != "serve" || exe == "" {
-		return false
-	}
-	base := filepath.Base(exe)
-	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
-		base = base[i+1:]
-	}
-	return strings.Contains(strings.ToLower(cmdline), strings.ToLower(base))
-}
+// isGateway reports whether a command line runs `<exe> serve`.
+func isGateway(cmdline, exe string) bool { return idle.SameProgram(cmdline, exe, "serve") }
 
 // processCommand returns a running process's command line ("" if it is
 // gone or the OS won't say).
-var processCommand = func(pid int) string {
-	id := strconv.Itoa(pid)
-	switch runtime.GOOS {
-	case "linux":
-		b, err := os.ReadFile("/proc/" + id + "/cmdline")
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(strings.ReplaceAll(string(b), "\x00", " "))
-	case "windows":
-		out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
-			"(Get-CimInstance Win32_Process -Filter 'ProcessId="+id+"').CommandLine").Output()
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(string(out))
-	default:
-		out, err := exec.Command("ps", "-o", "command=", "-p", id).Output()
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(string(out))
-	}
-}
+var processCommand = func(pid int) string { return idle.CommandLine(pid) }
 
 // terminate asks the gateway to stop: SIGTERM (it drains requests) where
 // there are signals, TerminateProcess on Windows.
