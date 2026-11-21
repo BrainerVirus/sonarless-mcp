@@ -1,6 +1,6 @@
 module github.com/BrainerVirus/sonarless-mcp
 
-go 1.27.1
+go 1.27.4
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
