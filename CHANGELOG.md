@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.8.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.7.0...v0.8.0) (2026-11-21)
+
+### Features
+
+* **status:** memory, gateway sessions, bridges and scans; stop --all ([#7](https://github.com/BrainerVirus/sonarless-mcp/issues/7)) ([bfe6783](https://github.com/BrainerVirus/sonarless-mcp/commit/bfe6783ffdb9fde850ac020bb8421d37afd86397))
+
 ## [0.7.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.6.1...v0.7.0) (2026-11-21)
 
 ### Features
