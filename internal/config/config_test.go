@@ -136,3 +136,24 @@ func TestServerJavaOpts(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPJavaOpts(t *testing.T) {
+	// The lean default, measured on 80 tool calls (sonarless-mcp#2): 315 -> 208 MiB, same latency.
+	setup(t, "", "")
+	c, _, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k"
+	if got := c.Get(MCPJavaOpts); got != want {
+		t.Errorf("default = %q, want %q", got, want)
+	}
+	setup(t, MCPJavaOpts+"=-Xmx256m\n", "")
+	if c, _, _ = Load(""); c.Get(MCPJavaOpts) != "-Xmx256m" {
+		t.Errorf("override = %q", c.Get(MCPJavaOpts))
+	}
+	setup(t, MCPJavaOpts+"=none\n", "")
+	if c, _, _ = Load(""); c.Get(MCPJavaOpts) != "none" {
+		t.Errorf("none = %q", c.Get(MCPJavaOpts))
+	}
+}

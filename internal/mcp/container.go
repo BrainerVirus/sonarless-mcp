@@ -64,6 +64,7 @@ func (m *Container) spec() string {
 		m.SonarURL,
 		m.Cfg.Get(config.MCPToolsets),
 		m.Cfg.Get(config.MCPReadOnly),
+		m.Cfg.Get(config.MCPJavaOpts),
 	}, "\x00")))
 	return hex.EncodeToString(h[:8])
 }
@@ -131,6 +132,9 @@ func (m *Container) create(ctx context.Context) error {
 	if m.Cfg.Bool(config.MCPReadOnly) {
 		args = append(args, "-e", "SONARQUBE_READ_ONLY=true")
 	}
+	if env := javaToolOptions(m.Cfg.Get(config.MCPJavaOpts)); env != "" {
+		args = append(args, "-e", env)
+	}
 	args = append(args, m.Image)
 	_, err := docker.Run(ctx, args...)
 	if err != nil && (strings.Contains(err.Error(), "address already in use") || strings.Contains(err.Error(), "port is already allocated")) {
@@ -178,4 +182,14 @@ func (m *Container) Stop(ctx context.Context) error { return docker.Stop(ctx, m.
 func (m *Container) Running(ctx context.Context) bool {
 	c, err := docker.Inspect(ctx, m.name())
 	return err == nil && c.Running()
+}
+
+// javaToolOptions is the JAVA_TOOL_OPTIONS entry for the MCP server's JVM
+// (every JVM reads it), or "" for none / empty: the JVM's own defaults.
+func javaToolOptions(opts string) string {
+	opts = strings.TrimSpace(opts)
+	if opts == "" || strings.EqualFold(opts, "none") {
+		return ""
+	}
+	return "JAVA_TOOL_OPTIONS=" + opts
 }
