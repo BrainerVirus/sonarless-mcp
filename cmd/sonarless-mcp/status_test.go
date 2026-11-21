@@ -35,6 +35,7 @@ func testInstance(t *testing.T, gatewayURL string) (e *env, calls string) {
 	home := t.TempDir()
 	t.Setenv("SONARLESS_HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	t.Setenv("XDG_CACHE_HOME", "")
 	t.Setenv("SONARLESS_INSTANCE", "sltest")
 	t.Setenv("SONARLESS_SERVER_PORT", "19000")
 	t.Setenv("SONARLESS_MCP_PORT", "19100")
@@ -60,8 +61,17 @@ func testInstance(t *testing.T, gatewayURL string) (e *env, calls string) {
 		"      sltest-mcp) echo '" + inspect("sltest-mcp", "running") + "' ;;\n" +
 		"      sltest-mcp-work) echo '" + inspect("sltest-mcp-work", "running") + "' ;;\n" +
 		"      sltest-mcp-old) echo '" + inspect("sltest-mcp-old", "exited") + "' ;;\n" +
+		"      sltest-mcp-mcp) echo '" + inspect("sltest-mcp-mcp", "running") + "' ;;\n" +
+		"      sltest-mcp-server) echo '" + inspect("sltest-mcp-server", "running") + "' ;;\n" +
 		"      *) echo \"Error: No such container: $3\" >&2; exit 1 ;;\n    esac ;;\n" +
-		"  'ps -a') printf 'sltest-server\\nsltest-mcp\\nsltest-mcp-work\\nsltest-mcp-old\\nother-mcp-x\\n' ;;\n" +
+		// Labels: this instance's MCP containers carry instance=sltest; an
+		// instance literally named "sltest-mcp" (containers sltest-mcp-mcp,
+		// sltest-mcp-server) shares their name prefix but not the label.
+		"  'ps -a')\n    case \"$4\" in\n" +
+		"      label=sonarless-mcp.instance=sltest) printf 'sltest-mcp\\nsltest-mcp-work\\nsltest-mcp-old\\n' ;;\n" +
+		"      label=sonarless-mcp.instance=sltest-mcp) printf 'sltest-mcp-mcp\\n' ;;\n" +
+		"      label=sonarless-mcp.managed=true) printf 'sltest-server\\nsltest-mcp\\nsltest-mcp-work\\nsltest-mcp-old\\nsltest-mcp-mcp\\nsltest-mcp-server\\n' ;;\n" +
+		"    esac ;;\n" +
 		"  stats*) for n in \"$@\"; do case \"$n\" in sltest-*) printf '%s\\t512MiB / 15.5GiB\\n' \"$n\" ;; esac; done ;;\n" +
 		"  stop*) echo \"$2\" ;;\n" +
 		"esac\n"
@@ -142,9 +152,9 @@ func statusFixture(t *testing.T) *env {
 		4300: fakeExe + " mcp /ws/app", // a bridge running a scan through sonarless_scan
 	})
 	for _, p := range []idle.Proc{
-		{Kind: idle.KindShim, PID: 4200, Exe: fakeExe, Workspace: "/ws/app"},
-		{Kind: idle.KindShim, PID: 4201, Exe: fakeExe, Workspace: "/ws/gone"},
-		{Kind: idle.KindScan, PID: 4300, Exe: fakeExe, Workspace: "/ws/app", Project: "app", Scanner: "maven", State: idle.ScanWaiting},
+		{Kind: idle.KindShim, PID: 4200, Exe: fakeExe, Verb: "mcp", Workspace: "/ws/app"},
+		{Kind: idle.KindShim, PID: 4201, Exe: fakeExe, Verb: "mcp", Workspace: "/ws/gone"},
+		{Kind: idle.KindScan, PID: 4300, Exe: fakeExe, Verb: "mcp", Workspace: "/ws/app", Project: "app", Scanner: "maven", State: idle.ScanWaiting},
 	} {
 		if _, err := idle.Register(e.cfg, p); err != nil {
 			t.Fatal(err)
@@ -268,13 +278,10 @@ func TestStopAllStopsEveryContainerAndTheGateway(t *testing.T) {
 		ran = append(ran, name+" "+strings.Join(args, " "))
 		return "", nil
 	}}
-	unit := clients.AutostartFile(ce)
-	if err := os.MkdirAll(filepath.Dir(unit), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(unit, []byte("[Unit]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeUnit(t, ce, map[string]string{
+		"SONARLESS_HOME": os.Getenv("SONARLESS_HOME"), "XDG_CONFIG_HOME": os.Getenv("XDG_CONFIG_HOME"),
+		"SONARLESS_INSTANCE": "sltest", "PATH": "/usr/bin",
+	})
 
 	// Plain stop: containers only.
 	var out bytes.Buffer
@@ -295,8 +302,10 @@ func TestStopAllStopsEveryContainerAndTheGateway(t *testing.T) {
 			t.Errorf("container %s not stopped; docker calls:\n%s", n, log)
 		}
 	}
-	if strings.Contains(string(log), "stop other-mcp-x") {
-		t.Errorf("stopped another instance's container; docker calls:\n%s", log)
+	for _, n := range []string{"sltest-mcp-mcp", "sltest-mcp-server"} { // instance "sltest-mcp"
+		if strings.Contains(string(log), "stop "+n+"\n") {
+			t.Errorf("stopped another instance's container %s; docker calls:\n%s", n, log)
+		}
 	}
 
 	// stop --all: the gateway too.
@@ -320,4 +329,121 @@ func TestStopAllStopsEveryContainerAndTheGateway(t *testing.T) {
 	if !strings.Contains(string(log), "stop sltest-mcp-work\n") || !strings.Contains(out.String(), "Gateway stopped.") {
 		t.Errorf("stop --all output %q; docker calls:\n%s", out.String(), log)
 	}
+}
+
+// writeUnit writes the systemd unit setup would, with env.
+func writeUnit(t *testing.T, ce clients.Env, env map[string]string) {
+	t.Helper()
+	unit := clients.AutostartFile(ce)
+	if err := os.MkdirAll(filepath.Dir(unit), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	b.WriteString("[Service]\nExecStart=\"/opt/bin/sonarless-mcp\" serve\n")
+	for k, v := range env {
+		fmt.Fprintf(&b, "Environment=\"%s=%s\"\n", k, strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%").Replace(v))
+	}
+	b.WriteString("Restart=always\n")
+	if err := os.WriteFile(unit, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStopAllLeavesAnotherConfigsGateway(t *testing.T) {
+	gw := fakeGateway(t, "gw-token", 0, time.Now())
+	e, _ := testInstance(t, gw.URL) // a scratch SONARLESS_HOME
+	fakeProcs(t, nil)
+	var ran []string
+	ce := clients.Env{Home: t.TempDir(), GOOS: "linux", Run: func(name string, args ...string) (string, error) {
+		ran = append(ran, name+" "+strings.Join(args, " "))
+		return "", nil
+	}}
+	// The login service was installed from the user's real config: no
+	// SONARLESS_HOME, default instance.
+	writeUnit(t, ce, map[string]string{"PATH": "/usr/bin"})
+
+	var out bytes.Buffer
+	if err := runStop(context.Background(), &out, e, true, ce); err != nil {
+		t.Fatal(err)
+	}
+	if len(ran) != 0 {
+		t.Errorf("stopped another config's login service: %v", ran)
+	}
+	if !strings.Contains(out.String(), "belongs to another sonarless-mcp config") ||
+		!strings.Contains(out.String(), `its SONARLESS_HOME="", here "`+os.Getenv("SONARLESS_HOME")+`"`) ||
+		strings.Contains(out.String(), "Gateway stopped.") {
+		t.Errorf("output:\n%s", out.String())
+	}
+}
+
+func TestServiceEnv(t *testing.T) {
+	unit := "[Service]\nExecStart=\"/opt/bin/sonarless-mcp\" serve\n" +
+		`Environment="SONARLESS_HOME=/home/me/my \"sq\" 100%%"` + "\n" +
+		`Environment="SONARLESS_INSTANCE=work"` + "\n"
+	if got := serviceEnv("linux", unit); got["SONARLESS_HOME"] != `/home/me/my "sq" 100%` || got["SONARLESS_INSTANCE"] != "work" {
+		t.Errorf("systemd: %v", got)
+	}
+	plist := `<dict>
+  <key>Label</key><string>io.github.brainervirus.sonarless-mcp.gateway</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>SONARLESS_HOME</key><string>/Users/me/a &amp; b</string>
+  </dict>
+</dict>`
+	got := serviceEnv("darwin", plist)
+	if got["SONARLESS_HOME"] != "/Users/me/a & b" || len(got) != 1 {
+		t.Errorf("launchd: %v", got)
+	}
+}
+
+func TestAgentStatusTextCapsLists(t *testing.T) {
+	e := statusFixture(t)
+	table := map[int]string{4100: fakeExe + " serve"}
+	for i := 0; i < 8; i++ {
+		pid := 5000 + i
+		table[pid] = fakeExe + " mcp /ws/many"
+		for _, kind := range []string{idle.KindShim, idle.KindScan} {
+			if _, err := idle.Register(e.cfg, idle.Proc{Kind: kind, PID: pid, Exe: fakeExe, Verb: "mcp", Workspace: fmt.Sprintf("/ws/many%d", i), Project: "p", Scanner: "cli"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	fakeProcs(t, table)
+	text := statusText(context.Background(), e)
+	for _, s := range []string{"stdio bridges: 8 (", "running scans: 8 ("} {
+		line := lineWith(text, s)
+		if n := strings.Count(line, "/ws/many"); n != 5 || !strings.HasSuffix(line, "; +3 more)") {
+			t.Errorf("%q names %d entries: %s", s, n, line)
+		}
+	}
+}
+
+func TestAgentStatusTextCapsSessions(t *testing.T) {
+	sessions := make([]map[string]any, 9)
+	for i := range sessions {
+		sessions[i] = map[string]any{"workspace": fmt.Sprintf("/ws/s%d", i), "lastRequest": time.Now().Add(-time.Duration(i) * time.Minute)}
+	}
+	gw := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"pid": 1, "started": time.Now(), "sessions": sessions})
+	}))
+	t.Cleanup(gw.Close)
+	e, _ := testInstance(t, gw.URL)
+	fakeProcs(t, nil)
+	if err := os.MkdirAll(filepath.Dir(e.cfg.GatewayTokenFile()), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(e.cfg.GatewayTokenFile(), []byte("t"), 0o600)
+	line := lineWith(statusText(context.Background(), e), "gateway:")
+	if !strings.Contains(line, "9 session(s): /ws/s0 ") || strings.Count(line, "/ws/s") != 5 ||
+		strings.Contains(line, "/ws/s5") || !strings.HasSuffix(line, "; +4 more") {
+		t.Errorf("sessions not capped to the 5 most recent: %s", line)
+	}
+}
+
+func lineWith(text, prefix string) string {
+	for _, l := range strings.Split(text, "\n") {
+		if strings.HasPrefix(l, prefix) {
+			return l
+		}
+	}
+	return ""
 }

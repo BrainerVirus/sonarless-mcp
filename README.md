@@ -252,11 +252,15 @@ scans in progress, CLI or agent-started (`waiting` for the server to start, or
 `scanning`). `--json` prints the same as JSON.
 
 `stop` stops the server, the local MCP container and every remote MCP
-container, including one left from a removed remote. It leaves the gateway
-running: it holds no container memory and connected clients expect it to
-answer. `stop --all` stops it too, through its login service where setup
-installed one (systemd stops it until the next login, launchd until the next
-login or `setup`); the next client that needs it starts it again.
+container of this instance, including one left from a removed remote (found by
+its `sonarless-mcp.instance` label, never by name, so another
+`SONARLESS_INSTANCE` is untouched). It leaves the gateway running: it holds no
+container memory and connected clients expect it to answer. `stop --all` stops
+it too, through its login service where setup installed one for this config
+(systemd stops it until the next login, launchd until the next login or
+`setup`); the next client that needs it starts it again. The login service is
+one per user: if it was installed with another `SONARLESS_HOME`,
+`SONARLESS_INSTANCE` or XDG dir, `stop --all` leaves it running and says so.
 
 Scanners: Maven projects use `./mvnw` → `mvn` → a Maven container; Gradle
 projects use `./gradlew` → `gradle` → a Gradle container (the SonarQube plugin is

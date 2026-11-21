@@ -31,9 +31,9 @@ func TestRunningKeepsLiveRecordsOnly(t *testing.T) {
 		queries = append(queries, pids)
 		table := map[int]string{
 			10: "/opt/bin/sonarless-mcp mcp /ws/a",
-			11: "/usr/bin/vim notes.txt", // pid reused by another program
+			11: "/usr/bin/vim notes.txt",                   // pid reused by another program
 			13: "/usr/bin/grep -r sonarless-mcp mcp /ws/d", // reused by one that mentions us
-			14: "/opt/bin/sonarless-mcp serve",            // reused by our gateway
+			14: "/opt/bin/sonarless-mcp serve",             // reused by our gateway
 			20: "/opt/bin/sonarless-mcp scan",
 			// 12: gone
 		}
@@ -180,14 +180,14 @@ func TestSameProgram(t *testing.T) {
 		want               bool
 	}{
 		{"/opt/bin/sonarless-mcp mcp /ws", exe, "mcp", true},
-		{"sonarless-mcp mcp", exe, "mcp", true},                      // started from PATH
+		{"sonarless-mcp mcp", exe, "mcp", true},                       // started from PATH
 		{"/home/me/.local/bin/sonarless-mcp scan", exe, "scan", true}, // a symlink
 		{`"C:\Program Files\x\Sonarless-MCP.exe" mcp C:\ws`, `C:\Program Files\x\sonarless-mcp.exe`, "mcp", true},
 		{`C:\Tools\sonarless-mcp.exe serve`, `C:\Tools\sonarless-mcp.exe`, "serve", true},
 		{"/opt/my apps/sonarless-mcp mcp", "/opt/my apps/sonarless-mcp", "mcp", true}, // /proc: spaces unquoted
-		{"/opt/bin/sonarless-mcp serve", exe, "mcp", false},                         // another verb
-		{"/opt/bin/sonarless-mcp", exe, "mcp", false},                               // no verb
-		{"/usr/bin/grep sonarless-mcp mcp", exe, "mcp", false},                      // mentions us in its args
+		{"/opt/bin/sonarless-mcp serve", exe, "mcp", false},                           // another verb
+		{"/opt/bin/sonarless-mcp", exe, "mcp", false},                                 // no verb
+		{"/usr/bin/grep sonarless-mcp mcp", exe, "mcp", false},                        // mentions us in its args
 		{"/usr/bin/vim /opt/bin/sonarless-mcp mcp", exe, "mcp", false},
 		{"/opt/bin/sonarless-mcp-old mcp", exe, "mcp", false}, // a name that merely starts like ours
 		{`"C:\Tools\sonarless-mcp.exe mcp`, `C:\Tools\sonarless-mcp.exe`, "mcp", false},

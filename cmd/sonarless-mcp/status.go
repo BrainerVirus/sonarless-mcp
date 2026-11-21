@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"github.com/BrainerVirus/sonarless-mcp/internal/docker"
 	"github.com/BrainerVirus/sonarless-mcp/internal/idle"
 	"github.com/BrainerVirus/sonarless-mcp/internal/mcp"
-	"github.com/BrainerVirus/sonarless-mcp/internal/sonar"
 	"github.com/spf13/cobra"
 )
 
@@ -199,10 +199,13 @@ func orNone(ws string) string {
 	return ws
 }
 
-// remoteContainerNames is every remote MCP container: those of configured
-// remotes plus any left from a removed remote (managed, named like one).
+// remoteContainerNames is every remote MCP container of this instance:
+// those of configured remotes plus any left from a removed remote, found by
+// this instance's label (never by name: instance "x" and an instance named
+// "x-mcp" share a name prefix). A leftover created before the label existed
+// is not found; `remote remove` deletes the container anyway.
 func remoteContainerNames(ctx context.Context, e *env) []string {
-	seen := map[string]bool{}
+	seen := map[string]bool{e.cfg.MCPContainer(): true, e.cfg.ServerContainer(): true}
 	var names []string
 	add := func(n string) {
 		if !seen[n] {
@@ -213,11 +216,9 @@ func remoteContainerNames(ctx context.Context, e *env) []string {
 	for _, c := range remoteContainers(e) {
 		add(c.Name)
 	}
-	managed, _ := docker.Names(ctx, sonar.LabelManaged+"=true")
-	for _, n := range managed {
-		if strings.HasPrefix(n, e.cfg.MCPContainer()+"-") {
-			add(n)
-		}
+	labelled, _ := docker.Names(ctx, mcp.InstanceLabel(e.cfg))
+	for _, n := range labelled {
+		add(n)
 	}
 	return names
 }
@@ -232,28 +233,81 @@ func stopContainers(ctx context.Context, e *env) error {
 	return errors.Join(errs...)
 }
 
-// stopGateway stops the gateway: through its login service where setup
-// installed one (a service manager would restart a killed gateway at once),
-// then any gateway still recorded in the cache dir (Windows, or one Claude
-// Code's helper started). It reports whether a gateway was asked to stop.
-// A client that connects later starts it again (Claude Code's helper, or
-// the login service at the next login).
-func stopGateway(e *env, ce clients.Env) (bool, error) {
+// stopGateway stops this config's gateway: through its login service where
+// setup installed one for this config (a service manager would restart a
+// killed gateway at once), then any gateway recorded in this config's cache
+// dir (Windows, or one Claude Code's helper started). The login service is
+// one per user: when it was installed for another config (another
+// SONARLESS_HOME or instance) it is left alone and note says so. stopped
+// reports whether a gateway was asked to stop. A client that connects later
+// starts it again (Claude Code's helper, or the login service at the next
+// login).
+func stopGateway(e *env, ce clients.Env) (stopped bool, note string, err error) {
 	var errs []error
-	asked := false
-	if clients.AutostartInstalled(ce) {
-		base := filepath.Base(clients.AutostartFile(ce))
-		switch ce.GOOS {
-		case "linux":
-			_, err := ce.Run("systemctl", "--user", "stop", base)
-			errs, asked = append(errs, err), err == nil
-		case "darwin":
-			_, err := ce.Run("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), strings.TrimSuffix(base, ".plist")))
-			asked = err == nil // fails when not loaded: nothing to stop
+	if clients.AutostartInstalled(ce) && (ce.GOOS == "linux" || ce.GOOS == "darwin") {
+		file := clients.AutostartFile(ce)
+		b, rerr := os.ReadFile(file)
+		if other := otherConfig(ce.GOOS, string(b)); rerr != nil || other != "" {
+			note = fmt.Sprintf("Left the login-service gateway running: %s belongs to another sonarless-mcp config (%s).", file, other)
+		} else {
+			base := filepath.Base(file)
+			if ce.GOOS == "linux" {
+				_, err := ce.Run("systemctl", "--user", "stop", base)
+				errs, stopped = append(errs, err), err == nil
+			} else {
+				_, err := ce.Run("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), strings.TrimSuffix(base, ".plist")))
+				stopped = err == nil // fails when not loaded: nothing to stop
+			}
 		}
 	}
-	stopped, err := mcp.StopGateway(e.cfg)
-	return asked || stopped, errors.Join(append(errs, err)...)
+	killed, err := mcp.StopGateway(e.cfg)
+	return stopped || killed, note, errors.Join(append(errs, err)...)
+}
+
+// configEnv are the variables that pick which config a gateway reads: setup
+// writes them into the login service as it saw them (gatewayEnv).
+var configEnv = []string{"SONARLESS_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "SONARLESS_INSTANCE"}
+
+// otherConfig compares the environment recorded in a login service file
+// (systemd unit or LaunchAgent) with this process's for configEnv; it
+// returns the differences ("" when the service runs this config).
+func otherConfig(goos, file string) string {
+	recorded := serviceEnv(goos, file)
+	var diff []string
+	for _, k := range configEnv {
+		if v := os.Getenv(k); recorded[k] != v {
+			diff = append(diff, fmt.Sprintf("its %s=%q, here %q", k, recorded[k], v))
+		}
+	}
+	return strings.Join(diff, ", ")
+}
+
+var plistEnvEntry = regexp.MustCompile(`<key>([^<]*)</key><string>([^<]*)</string>`)
+
+// serviceEnv reads the environment a login service file sets.
+func serviceEnv(goos, file string) map[string]string {
+	env := map[string]string{}
+	switch goos {
+	case "linux": // Environment="K=V", quoted by clients.systemdQuote
+		unquote := strings.NewReplacer(`\\`, `\`, `\"`, `"`, "%%", "%")
+		for _, line := range strings.Split(file, "\n") {
+			v, ok := strings.CutPrefix(strings.TrimSpace(line), "Environment=")
+			if !ok {
+				continue
+			}
+			v = unquote.Replace(strings.TrimSuffix(strings.TrimPrefix(v, `"`), `"`))
+			if k, val, ok := strings.Cut(v, "="); ok {
+				env[k] = val
+			}
+		}
+	case "darwin": // <key>K</key><string>V</string> under EnvironmentVariables
+		_, vars, _ := strings.Cut(file, "<key>EnvironmentVariables</key>")
+		unescape := strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&amp;", "&")
+		for _, m := range plistEnvEntry.FindAllStringSubmatch(vars, -1) {
+			env[unescape.Replace(m[1])] = unescape.Replace(m[2])
+		}
+	}
+	return env
 }
 
 func stopCommand() *cobra.Command {
@@ -283,8 +337,11 @@ running on purpose: it holds no container memory, and connected clients
 func runStop(ctx context.Context, w io.Writer, e *env, all bool, ce clients.Env) error {
 	err := stopContainers(ctx, e)
 	if all {
-		stopped, gerr := stopGateway(e, ce)
+		stopped, note, gerr := stopGateway(e, ce)
 		err = errors.Join(err, gerr)
+		if note != "" {
+			fmt.Fprintln(w, note)
+		}
 		if stopped && gerr == nil {
 			fmt.Fprintln(w, "Gateway stopped.")
 		}

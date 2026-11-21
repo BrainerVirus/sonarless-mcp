@@ -32,6 +32,14 @@ type Container struct {
 	Image string
 }
 
+// LabelInstance names the SONARLESS_INSTANCE an MCP container belongs to,
+// so `stop` and the idle watcher find this instance's leftover remote
+// containers without matching another instance's by name.
+const LabelInstance = "sonarless-mcp.instance"
+
+// InstanceLabel is the `key=value` label of cfg's instance.
+func InstanceLabel(cfg *config.Config) string { return LabelInstance + "=" + cfg.Get(config.Instance) }
+
 // NewLocal is the MCP container for the local SonarQube.
 func NewLocal(cfg *config.Config, log io.Writer) *Container {
 	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer(), Port: cfg.Int(config.MCPPort), SonarURL: cfg.ServerURLInNetwork(), Image: cfg.Get(config.MCPImage)}
@@ -120,6 +128,7 @@ func (m *Container) create(ctx context.Context) error {
 		"--network", m.Cfg.Network(),
 		"-p", fmt.Sprintf("127.0.0.1:%d:8080", m.Port),
 		"--label", sonar.LabelManaged + "=true",
+		"--label", InstanceLabel(m.Cfg),
 		"--label", sonar.LabelSpec + "=" + m.spec(),
 		"-e", "SONARQUBE_TRANSPORT=http",
 		"-e", "SONARQUBE_HTTP_HOST=0.0.0.0",

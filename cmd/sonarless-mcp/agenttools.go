@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -111,13 +112,15 @@ func statusText(ctx context.Context, e *env) string {
 	if g := r.Gateway; !g.Running {
 		fmt.Fprintf(&b, "gateway: not running (port %d)\n", g.Port)
 	} else {
-		ws := make([]string, len(g.Sessions))
-		for i, s := range g.Sessions {
+		sessions := slices.Clone(g.Sessions)
+		slices.SortStableFunc(sessions, func(a, b mcp.GatewaySession) int { return b.LastRequest.Compare(a.LastRequest) })
+		ws := make([]string, len(sessions))
+		for i, s := range sessions {
 			ws[i] = fmt.Sprintf("%s (last request %s ago)", orNone(s.Workspace), since(s.LastRequest))
 		}
 		fmt.Fprintf(&b, "gateway: running on port %d, pid %d, up %s; %d session(s)", g.Port, g.PID, orDash(g.Uptime), len(ws))
 		if len(ws) > 0 {
-			b.WriteString(": " + strings.Join(ws, "; "))
+			b.WriteString(": " + strings.Join(capList(ws), "; "))
 		}
 		b.WriteString("\n")
 	}
@@ -152,11 +155,22 @@ func statusText(ctx context.Context, e *env) string {
 	return b.String()
 }
 
+// listCap is how many sessions, bridges or scans the agent status names;
+// the rest are counted, so the tool result stays small on a busy machine.
+const listCap = 5
+
+func capList(items []string) []string {
+	if len(items) <= listCap {
+		return items
+	}
+	return append(slices.Clone(items[:listCap]), fmt.Sprintf("+%d more", len(items)-listCap))
+}
+
 func listSuffix(items []string) string {
 	if len(items) == 0 {
 		return ""
 	}
-	return " (" + strings.Join(items, "; ") + ")"
+	return " (" + strings.Join(capList(items), "; ") + ")"
 }
 
 func orDash(s string) string {
