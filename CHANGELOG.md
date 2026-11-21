@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.6.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.6.0...v0.6.1) (2026-11-21)
+
+### Performance Improvements
+
+* **mcp:** lean JVM options for the shared MCP server, configurable ([#5](https://github.com/BrainerVirus/sonarless-mcp/issues/5)) ([5a2ce51](https://github.com/BrainerVirus/sonarless-mcp/commit/5a2ce5117c89347fca3a54bd6bee4ea978364fd1))
+
 ## [0.6.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.5.2...v0.6.0) (2026-11-21)
 
 ### Features
