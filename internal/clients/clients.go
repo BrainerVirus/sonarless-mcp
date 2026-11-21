@@ -704,7 +704,8 @@ func writeFile(file string, b []byte) error { return writeFileMode(file, b, 0) }
 
 // writePrivateFile writes a file only its owner can read (0600), whatever
 // mode an existing copy had: autostart files can carry settings such as
-// SONARLESS_ADMIN_PASS.
+// SONARLESS_ADMIN_PASS. On Windows the mode is not enforced; the file lives
+// under %AppData%, which only its user can read.
 func writePrivateFile(file string, b []byte) error { return writeFileMode(file, b, 0o600) }
 
 // writeFileMode writes b to file through a temporary file. A zero force
@@ -730,9 +731,11 @@ func writeFileMode(file string, b []byte, force os.FileMode) error {
 	if err := os.WriteFile(tmp, b, mode); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmp, mode); err != nil { // WriteFile's mode passes through the umask
-		_ = os.Remove(tmp)
-		return err
+	if force != 0 { // WriteFile's mode passes through the umask; a forced mode must not
+		if err := os.Chmod(tmp, mode); err != nil {
+			_ = os.Remove(tmp)
+			return err
+		}
 	}
 	return os.Rename(tmp, file)
 }

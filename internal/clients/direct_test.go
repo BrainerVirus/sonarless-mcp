@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -132,8 +133,11 @@ func TestSetupRegistersDirectEntries(t *testing.T) {
 	if autostart == "" {
 		t.Fatal("no autostart installed")
 	}
-	if fi, err := os.Stat(autostart); err != nil || fi.Mode().Perm() != 0o600 {
-		t.Errorf("autostart file mode = %v (%v), want 0600: it can carry SONARLESS_ADMIN_PASS", fi.Mode().Perm(), err)
+	if fi, err := os.Stat(autostart); err != nil {
+		t.Errorf("autostart file: %v", err)
+	} else if runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		// Windows has no mode bits; %AppData% is private through its ACL.
+		t.Errorf("autostart file mode = %v, want 0600: it can carry SONARLESS_ADMIN_PASS", fi.Mode().Perm())
 	}
 	unit := read(t, autostart)
 	if !strings.Contains(unit, `ExecStart="/opt/bin/sonarless-mcp" serve`) || !strings.Contains(unit, "Restart=always") {
