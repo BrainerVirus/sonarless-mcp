@@ -39,6 +39,7 @@ type Proc struct {
 	PID       int       `json:"pid"`
 	Exe       string    `json:"exe"`
 	Started   time.Time `json:"started"`
+	Verb      string    `json:"verb"`                // the process's command: mcp, scan, serve
 	State     string    `json:"state,omitempty"`     // scans: waiting, scanning
 	Workspace string    `json:"workspace,omitempty"` // project root
 	Project   string    `json:"project,omitempty"`   // scans: project key
@@ -54,8 +55,9 @@ type Record struct {
 	p    Proc
 }
 
-// Register records p (PID, Exe and Started default to this process, now).
-// Call Done on every exit path.
+// Register records p (PID, Exe, Verb and Started default to this process,
+// now). Call Done on every exit path. Records name workspaces, so they are
+// readable by the user only.
 func Register(cfg *config.Config, p Proc) (*Record, error) {
 	if p.PID == 0 {
 		p.PID = os.Getpid()
@@ -63,12 +65,16 @@ func Register(cfg *config.Config, p Proc) (*Record, error) {
 	if p.Exe == "" {
 		p.Exe, _ = os.Executable()
 	}
+	if p.Verb == "" && len(os.Args) > 1 {
+		p.Verb = os.Args[1]
+	}
 	if p.Started.IsZero() {
 		p.Started = time.Now()
 	}
-	if err := os.MkdirAll(procsDir(cfg), 0o755); err != nil {
+	if err := os.MkdirAll(procsDir(cfg), 0o700); err != nil {
 		return nil, err
 	}
+	_ = os.Chmod(procsDir(cfg), 0o700) // made by an older build with 0755
 	r := &Record{file: filepath.Join(procsDir(cfg), fmt.Sprintf("%s-%d-%d.json", p.Kind, p.PID, p.Started.UnixNano())), p: p}
 	if err := r.write(); err != nil {
 		return nil, err
@@ -79,7 +85,7 @@ func Register(cfg *config.Config, p Proc) (*Record, error) {
 func (r *Record) write() error {
 	b, _ := json.Marshal(r.p)
 	tmp := r.file + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, r.file) // readers never see half a record
@@ -134,7 +140,7 @@ func Running(cfg *config.Config, kinds ...string) []Proc {
 	cmdlines := CommandLines(pids)
 	var out []Proc
 	for _, r := range recs {
-		if !SameProgram(cmdlines[r.p.PID], r.p.Exe) {
+		if !SameProgram(cmdlines[r.p.PID], r.p.Exe, r.p.Verb) {
 			_ = os.Remove(r.file)
 			continue
 		}
@@ -144,18 +150,39 @@ func Running(cfg *config.Config, kinds ...string) []Proc {
 	return out
 }
 
-// SameProgram reports whether a command line runs the binary exe (same
-// file name; Windows names compare case-insensitively).
-func SameProgram(cmdline, exe string) bool {
-	if strings.TrimSpace(cmdline) == "" || exe == "" {
+// SameProgram reports whether a command line runs `<exe> <verb> ...`: its
+// program (argv[0]) is exe, or a file of the same name (on PATH, a
+// symlink; Windows names compare case-insensitively, ".exe" optional), and
+// its first argument is verb. Merely mentioning sonarless-mcp in the
+// arguments of another program does not count.
+func SameProgram(cmdline, exe, verb string) bool {
+	cmdline = strings.TrimSpace(cmdline)
+	if cmdline == "" || exe == "" || verb == "" {
 		return false
 	}
-	base := filepath.Base(exe)
-	if i := strings.LastIndexAny(base, `/\`); i >= 0 {
-		base = base[i+1:]
+	var prog, rest string
+	switch {
+	case strings.HasPrefix(cmdline, `"`): // Windows quotes a program path with spaces
+		end := strings.Index(cmdline[1:], `"`)
+		if end < 0 {
+			return false
+		}
+		prog, rest = cmdline[1:end+1], cmdline[end+2:]
+	case strings.HasPrefix(strings.ToLower(cmdline), strings.ToLower(exe)+" "): // a path with spaces, unquoted (/proc)
+		prog, rest = cmdline[:len(exe)], cmdline[len(exe):]
+	default:
+		prog, rest, _ = strings.Cut(cmdline, " ")
 	}
-	base = strings.TrimSuffix(strings.ToLower(base), ".exe")
-	return strings.Contains(strings.ToLower(cmdline), base)
+	args := strings.Fields(rest)
+	return len(args) > 0 && args[0] == verb && programName(prog) == programName(exe)
+}
+
+// programName is a program path's file name, lower case, without ".exe".
+func programName(p string) string {
+	if i := strings.LastIndexAny(p, `/\`); i >= 0 {
+		p = p[i+1:]
+	}
+	return strings.TrimSuffix(strings.ToLower(p), ".exe")
 }
 
 // CommandLine returns a running process's command line ("" if it is gone

@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
@@ -67,10 +66,7 @@ func StopGateway(cfg *config.Config) (bool, error) {
 }
 
 // isGateway reports whether a command line runs `<exe> serve`.
-func isGateway(cmdline, exe string) bool {
-	f := strings.Fields(cmdline)
-	return len(f) >= 2 && f[len(f)-1] == "serve" && idle.SameProgram(cmdline, exe)
-}
+func isGateway(cmdline, exe string) bool { return idle.SameProgram(cmdline, exe, "serve") }
 
 // processCommand returns a running process's command line ("" if it is
 // gone or the OS won't say).

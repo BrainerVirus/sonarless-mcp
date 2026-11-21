@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,8 @@ func TestRunningKeepsLiveRecordsOnly(t *testing.T) {
 		table := map[int]string{
 			10: "/opt/bin/sonarless-mcp mcp /ws/a",
 			11: "/usr/bin/vim notes.txt", // pid reused by another program
+			13: "/usr/bin/grep -r sonarless-mcp mcp /ws/d", // reused by one that mentions us
+			14: "/opt/bin/sonarless-mcp serve",            // reused by our gateway
 			20: "/opt/bin/sonarless-mcp scan",
 			// 12: gone
 		}
@@ -51,17 +54,19 @@ func TestRunningKeepsLiveRecordsOnly(t *testing.T) {
 		}
 		return r
 	}
-	reg(Proc{Kind: KindShim, PID: 10, Workspace: "/ws/a", Started: now})
-	reg(Proc{Kind: KindShim, PID: 11, Workspace: "/ws/b", Started: now})
-	reg(Proc{Kind: KindShim, PID: 12, Workspace: "/ws/c", Started: now})
-	scan := reg(Proc{Kind: KindScan, PID: 20, Workspace: "/ws/a", Project: "a", Scanner: "cli", State: ScanWaiting, Started: now})
+	reg(Proc{Kind: KindShim, PID: 10, Verb: "mcp", Workspace: "/ws/a", Started: now})
+	reg(Proc{Kind: KindShim, PID: 11, Verb: "mcp", Workspace: "/ws/b", Started: now})
+	reg(Proc{Kind: KindShim, PID: 12, Verb: "mcp", Workspace: "/ws/c", Started: now})
+	reg(Proc{Kind: KindShim, PID: 13, Verb: "mcp", Workspace: "/ws/d", Started: now})
+	reg(Proc{Kind: KindShim, PID: 14, Verb: "mcp", Workspace: "/ws/e", Started: now})
+	scan := reg(Proc{Kind: KindScan, PID: 20, Verb: "scan", Workspace: "/ws/a", Project: "a", Scanner: "cli", State: ScanWaiting, Started: now})
 
 	shims := Running(cfg, KindShim)
 	if len(shims) != 1 || shims[0].PID != 10 || shims[0].Workspace != "/ws/a" {
 		t.Fatalf("shims: %+v", shims)
 	}
-	if len(queries) != 1 || len(queries[0]) != 3 {
-		t.Errorf("process queries %v, want one for all three shim pids", queries)
+	if len(queries) != 1 || len(queries[0]) != 5 {
+		t.Errorf("process queries %v, want one for all five shim pids", queries)
 	}
 	if files, _ := filepath.Glob(filepath.Join(procsDir(cfg), KindShim+"-*")); len(files) != 1 {
 		t.Errorf("stale shim records kept: %v", files)
@@ -90,8 +95,34 @@ func TestRegisterDefaultsToThisProcess(t *testing.T) {
 	}
 	defer r.Done()
 	got := Running(cfg, KindShim) // the real process table: this test binary
-	if len(got) != 1 || got[0].PID != os.Getpid() || got[0].Started.IsZero() {
+	if len(got) != 1 || got[0].PID != os.Getpid() || got[0].Started.IsZero() || got[0].Verb == "" {
 		t.Errorf("own record: %+v", got)
+	}
+}
+
+func TestRecordsReadableByTheUserOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no Unix permissions")
+	}
+	cfg := procsCfg(t)
+	if err := os.MkdirAll(procsDir(cfg), 0o755); err != nil { // as an older build left it
+		t.Fatal(err)
+	}
+	r, err := Register(cfg, Proc{Kind: KindScan, Workspace: "/ws/secret-project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Update(ScanScanning) // rewrites the record
+	defer r.Done()
+	if fi, err := os.Stat(procsDir(cfg)); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Errorf("procs dir mode %v (%v), want 0700", fi.Mode().Perm(), err)
+	}
+	files, _ := filepath.Glob(filepath.Join(procsDir(cfg), "*"))
+	if len(files) != 1 {
+		t.Fatalf("records: %v", files)
+	}
+	if fi, err := os.Stat(files[0]); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("record mode %v (%v), want 0600", fi.Mode().Perm(), err)
 	}
 }
 
@@ -143,19 +174,30 @@ func TestCommandLinesOneQuery(t *testing.T) {
 }
 
 func TestSameProgram(t *testing.T) {
+	const exe = "/opt/bin/sonarless-mcp"
 	cases := []struct {
-		cmdline, exe string
-		want         bool
+		cmdline, exe, verb string
+		want               bool
 	}{
-		{"/opt/bin/sonarless-mcp mcp", "/opt/bin/sonarless-mcp", true},
-		{`"C:\Tools\Sonarless-MCP.exe" mcp`, `C:\Tools\sonarless-mcp.exe`, true},
-		{"/usr/bin/vim notes.txt", "/opt/bin/sonarless-mcp", false},
-		{"", "/opt/bin/sonarless-mcp", false},
-		{"/opt/bin/sonarless-mcp mcp", "", false},
+		{"/opt/bin/sonarless-mcp mcp /ws", exe, "mcp", true},
+		{"sonarless-mcp mcp", exe, "mcp", true},                      // started from PATH
+		{"/home/me/.local/bin/sonarless-mcp scan", exe, "scan", true}, // a symlink
+		{`"C:\Program Files\x\Sonarless-MCP.exe" mcp C:\ws`, `C:\Program Files\x\sonarless-mcp.exe`, "mcp", true},
+		{`C:\Tools\sonarless-mcp.exe serve`, `C:\Tools\sonarless-mcp.exe`, "serve", true},
+		{"/opt/my apps/sonarless-mcp mcp", "/opt/my apps/sonarless-mcp", "mcp", true}, // /proc: spaces unquoted
+		{"/opt/bin/sonarless-mcp serve", exe, "mcp", false},                         // another verb
+		{"/opt/bin/sonarless-mcp", exe, "mcp", false},                               // no verb
+		{"/usr/bin/grep sonarless-mcp mcp", exe, "mcp", false},                      // mentions us in its args
+		{"/usr/bin/vim /opt/bin/sonarless-mcp mcp", exe, "mcp", false},
+		{"/opt/bin/sonarless-mcp-old mcp", exe, "mcp", false}, // a name that merely starts like ours
+		{`"C:\Tools\sonarless-mcp.exe mcp`, `C:\Tools\sonarless-mcp.exe`, "mcp", false},
+		{"", exe, "mcp", false},
+		{"/opt/bin/sonarless-mcp mcp", "", "mcp", false},
+		{"/opt/bin/sonarless-mcp mcp", exe, "", false},
 	}
 	for _, c := range cases {
-		if got := SameProgram(c.cmdline, c.exe); got != c.want {
-			t.Errorf("SameProgram(%q, %q) = %v, want %v", c.cmdline, c.exe, got, c.want)
+		if got := SameProgram(c.cmdline, c.exe, c.verb); got != c.want {
+			t.Errorf("SameProgram(%q, %q, %q) = %v, want %v", c.cmdline, c.exe, c.verb, got, c.want)
 		}
 	}
 }
