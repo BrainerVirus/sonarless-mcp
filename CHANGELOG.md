@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.6.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.5.2...v0.6.0) (2026-11-21)
+
+### Features
+
+* **server:** smaller default SonarQube heaps, each configurable ([#4](https://github.com/BrainerVirus/sonarless-mcp/issues/4)) ([98c1a2d](https://github.com/BrainerVirus/sonarless-mcp/commit/98c1a2d6ee39e3816f653a0f266a94bf4a76349f))
+
 ## [0.5.2](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.5.1...v0.5.2) (2026-11-21)
 
 ### Bug Fixes
