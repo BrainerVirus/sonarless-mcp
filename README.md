@@ -47,7 +47,9 @@ irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install | 
 
 `install` is a single file that is valid in both `sh` and PowerShell; it hands
 off to the platform installer, which detects your CPU, downloads the matching
-release, verifies its SHA-256 checksum, installs the binary (`~/.local/bin` or
+release, verifies its SHA-256 checksum (and, when [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+is installed, the checksums file's signature; see [Release signing](#release-signing)),
+installs the binary (`~/.local/bin` or
 `%LOCALAPPDATA%\Programs\sonarless-mcp`, added to your PATH), then opens the
 client picker (run by an agent, it lists the detected clients and the command
 to register them instead):
@@ -82,19 +84,76 @@ unregister, `--yes` / `--clients claude,cursor` for scripts). Installer options:
 `SONARLESS_MCP_VERSION=v1.2.3` pins a release, `SONARLESS_MCP_INSTALL_DIR`
 changes the target, `SONARLESS_MCP_NO_SETUP=1` skips the picker.
 
-Or with Go: `go install github.com/BrainerVirus/sonarless-mcp/cmd/sonarless-mcp@latest`.
+Or with Go: `go install github.com/BrainerVirus/sonarless-mcp/cmd/sonarless-mcp@latest`
+(a development build: it never upgrades itself in the background; `sonarless-mcp upgrade --version <tag>`
+replaces it with a signed release).
 
 Requires Docker (Docker Desktop on macOS/Windows).
 
-## Updating
+## Upgrading
 
-Installed binaries keep themselves current: once a day, the gateway, starting the MCP bridge,
-`start` or `scan` check GitHub Releases in the background, downloads a newer
-release, verifies its checksum, smoke-tests it and swaps it in, so the next
-start runs it. The same check pulls the latest SonarQube MCP image, which the
-shared container picks up the next time it starts from stopped (never mid-session).
-Run `sonarless-mcp update` to do it now; `SONARLESS_AUTO_UPDATE=false` turns the
-daily check off. Log: `<cache dir>/sonarless-mcp/update.log`.
+```sh
+sonarless-mcp upgrade                    # install the latest release now (alias: update)
+sonarless-mcp upgrade --check            # print installed and latest; change nothing
+sonarless-mcp upgrade --version v0.9.0   # install that release (also an older one)
+sonarless-mcp version                    # version, commit, build date, Go, OS/CPU (--json)
+```
+
+`upgrade` downloads the release for your OS and CPU, checks its signature and
+checksum (below), runs the new binary's `version` as a smoke test and only then
+replaces the running binary atomically, so a failed check leaves the installed
+one untouched. It also pulls the latest SonarQube MCP image, which the shared
+container picks up the next time it starts from stopped (never mid-session),
+and refreshes the agent skill in your clients. Restart your AI clients to use
+the new binary.
+
+Installed binaries also keep themselves current: once a day, the gateway,
+starting the MCP bridge, `start` or `scan` check GitHub Releases in the
+background and install a newer release once it is **a day old**, so a broken
+release can be pulled before it reaches you. The same run pulls the MCP image.
+`SONARLESS_AUTO_UPDATE=false` turns the background run off; `upgrade` still
+works. Log: `<cache dir>/sonarless-mcp/update.log`.
+
+In an interactive terminal, sonarless-mcp prints one line on stderr when a
+newer release exists (at most once a day), and one when a
+background upgrade has installed one:
+
+```
+A new release of sonarless-mcp is available: 0.9.0 → 0.10.0; run `sonarless-mcp upgrade` (https://github.com/BrainerVirus/sonarless-mcp/releases/tag/v0.10.0)
+```
+
+It only shows when both stdout and stderr are a terminal, never for `mcp`,
+`serve`, `upgrade` or `--json` output, so agents, MCP clients and scripts never
+see it. `SONARLESS_UPDATE_NOTICE=false` turns it off.
+
+### Release signing
+
+Every release's `checksums.txt` carries a [Sigstore](https://www.sigstore.dev/)
+keyless signature (`checksums.txt.sigstore.json`) made by this repository's
+release workflow on GitHub Actions. `upgrade` (and the background run) verify
+it against that identity before trusting the checksums, and refuse a release
+whose signature is missing or made by anyone else. Sigstore's trusted root comes
+from its TUF repository, anchored on the TUF root built into the binary and
+cached in `<cache dir>/sonarless-mcp/sigstore-tuf`. To check a download by hand:
+
+```sh
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github\.com/BrainerVirus/sonarless-mcp/\.github/workflows/release\.yml@refs/heads/main$' \
+  checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+```
+
+Releases up to v0.8.1 were published before signing existed. To go back to one
+of them, name it and opt in: `sonarless-mcp upgrade --version v0.8.1 --allow-unsigned`
+installs it on its checksum alone. The flag only accepts a release that is v0.8.1
+or older and older than the installed one; any later release without a valid signature is always
+refused. The install scripts do the same check when `cosign` is on your PATH:
+they first resolve "latest" to its tag through the GitHub API, and accept a
+missing signature only when that release (latest or a pinned
+`SONARLESS_MCP_VERSION`) is v0.8.1 or older. Without cosign they check the
+SHA-256 only.
 
 ## Use with AI agents
 
@@ -311,7 +370,8 @@ SONARLESS_IDLE_TIMEOUT=30m
 | `SONARLESS_IDLE_TIMEOUT` | `30m` | `0` keeps everything running |
 | `SONARLESS_WEB_HEAP` / `SONARLESS_CE_HEAP` / `SONARLESS_SEARCH_HEAP` | `256m` / `384m` / `256m` | Java heaps of SonarQube's web server, compute engine and Elasticsearch (SonarQube's own: 512m each); raise `SONARLESS_CE_HEAP` if a big project's report fails with OutOfMemoryError. Changing one recreates the server container; its data is kept |
 | `SONARLESS_INSTANCE` | `sonarless` | names the containers (`-server`, `-mcp`), network and volumes |
-| `SONARLESS_AUTO_UPDATE` | `true` | daily background update check (binary + MCP image) |
+| `SONARLESS_AUTO_UPDATE` | `true` | daily background upgrade to a signed release once it is a day old (binary + MCP image) |
+| `SONARLESS_UPDATE_NOTICE` | `true` | in a terminal, a one-line stderr notice when a newer release exists |
 | `SONARLESS_MCP_AGENT_TOOLS` | `true` | expose the `sonarless_*` tools to agents |
 | `SONARLESS_PLUGINS_DIR` | `<config dir>/plugins` | extra plugin jars (a `shellcheck` binary there is mounted into CLI scans) |
 | `SONARLESS_PROJECT_KEY` / `SONARLESS_PROJECT_NAME` | detected | per project |

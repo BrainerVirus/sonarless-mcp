@@ -3,17 +3,25 @@
 #   irm https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.ps1 | iex
 #   & ([scriptblock]::Create((irm .../install.ps1))) --yes   # args go to `sonarless-mcp setup`
 #
-# Detects the CPU, downloads the matching release, verifies its checksum,
-# installs to %LOCALAPPDATA%\Programs\sonarless-mcp (added to your user PATH),
-# then opens the client picker (`sonarless-mcp setup`).
+# Detects the CPU, downloads the matching release, verifies its checksum (and,
+# when cosign is installed, the checksums file's Sigstore signature by this
+# repository's release workflow), installs to %LOCALAPPDATA%\Programs\sonarless-mcp
+# (added to your user PATH), then opens the client picker (`sonarless-mcp setup`).
+# Later upgrades: `sonarless-mcp upgrade`.
 #
 # Env: SONARLESS_MCP_VERSION (tag, default latest), SONARLESS_MCP_INSTALL_DIR,
-#      SONARLESS_MCP_BASE_URL (download base; for mirrors and tests),
+#      SONARLESS_MCP_RELEASES_URL, SONARLESS_MCP_RELEASES_API_URL (release
+#      download and API roots; for mirrors and tests),
+#      SONARLESS_MCP_BASE_URL (one release's download dir; for CI snapshots),
 #      SONARLESS_MCP_NO_SETUP=1 (install only).
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $repo = 'BrainerVirus/sonarless-mcp'
+# Who signs checksums.txt: release.yml on main (semantic-release runs on the
+# push to main). internal/update.ReleaseIdentity pins the same identity.
+$signerIssuer = 'https://token.actions.githubusercontent.com'
+$signerIdentity = '^https://github\.com/BrainerVirus/sonarless-mcp/\.github/workflows/release\.yml@refs/heads/main$'
 $installDir = if ($env:SONARLESS_MCP_INSTALL_DIR) { $env:SONARLESS_MCP_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\sonarless-mcp' }
 
 $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
@@ -22,9 +30,26 @@ $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
     default { throw "unsupported CPU: $($env:PROCESSOR_ARCHITECTURE)" }
 }
 
-$base = if ($env:SONARLESS_MCP_BASE_URL) { $env:SONARLESS_MCP_BASE_URL }
-        elseif ($env:SONARLESS_MCP_VERSION) { "https://github.com/$repo/releases/download/$($env:SONARLESS_MCP_VERSION)" }
-        else { "https://github.com/$repo/releases/latest/download" }
+# Name the release before downloading it, so the archive, its checksums and
+# the signature check below are about one known tag. If the API can't be
+# reached (rate limit, proxy), fall back to releases/latest with the tag
+# unknown.
+$releasesUrl = if ($env:SONARLESS_MCP_RELEASES_URL) { $env:SONARLESS_MCP_RELEASES_URL } else { "https://github.com/$repo/releases" }
+$apiUrl = if ($env:SONARLESS_MCP_RELEASES_API_URL) { $env:SONARLESS_MCP_RELEASES_API_URL } else { "https://api.github.com/repos/$repo" }
+$tag = $env:SONARLESS_MCP_VERSION
+if ($env:SONARLESS_MCP_BASE_URL) {
+    $base = $env:SONARLESS_MCP_BASE_URL
+} else {
+    if (-not $tag) {
+        try {
+            $latest = if ($apiUrl -like 'file://*') { Get-Content -Raw ([uri]"$apiUrl/releases/latest").LocalPath | ConvertFrom-Json }
+                      else { Invoke-RestMethod -UseBasicParsing -Uri "$apiUrl/releases/latest" }
+            $tag = [string]$latest.tag_name
+        } catch { $tag = $null }
+        if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') { $tag = $null }
+    }
+    $base = if ($tag) { "$releasesUrl/download/$tag" } else { "$releasesUrl/latest/download" }
+}
 
 $asset = "sonarless-mcp_windows_$arch.zip"
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("sonarless-mcp-" + [guid]::NewGuid())
@@ -39,6 +64,28 @@ try {
     }
     $zip = Get-File $asset
     $sums = Get-File 'checksums.txt'
+
+    if (Get-Command cosign -ErrorAction SilentlyContinue) {
+        $bundle = $null
+        try { $bundle = Get-File 'checksums.txt.sigstore.json' } catch { $bundle = $null }
+        # Releases up to v0.8.1 were published before signing existed.
+        $preSigning = $false
+        if ($tag) {
+            try { $preSigning = [version](($tag.TrimStart('v')) -replace '-.*$', '') -le [version]'0.8.1' } catch { $preSigning = $false }
+        }
+        if ($bundle) {
+            & cosign verify-blob --bundle $bundle --certificate-oidc-issuer $signerIssuer `
+                --certificate-identity-regexp $signerIdentity $sums *> $null
+            if ($LASTEXITCODE -ne 0) { throw 'the signature of checksums.txt does not verify; nothing was installed' }
+            Write-Host 'Verified the cosign signature of checksums.txt.'
+        } elseif ($preSigning) {
+            Write-Host "$tag was published before releases were signed; checking its SHA-256 only."
+        } else {
+            throw 'the release has no signature (checksums.txt.sigstore.json); nothing was installed'
+        }
+    } else {
+        Write-Host 'cosign not found; skipping the signature check (the SHA-256 is still checked).'
+    }
 
     $line = Get-Content $sums | Where-Object { $_ -match " $([regex]::Escape($asset))$" } | Select-Object -First 1
     if (-not $line) { throw "$asset not listed in checksums.txt" }

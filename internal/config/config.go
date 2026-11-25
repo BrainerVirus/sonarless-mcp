@@ -49,6 +49,7 @@ const (
 	ScanTests        = "SONARLESS_SCAN_TESTS"
 	MetricsFile      = "SONARLESS_METRICS_FILE"
 	AutoUpdate       = "SONARLESS_AUTO_UPDATE"
+	UpdateNotice     = "SONARLESS_UPDATE_NOTICE"
 	AgentTools       = "SONARLESS_MCP_AGENT_TOOLS"
 	WebHeap          = "SONARLESS_WEB_HEAP"
 	CEHeap           = "SONARLESS_CE_HEAP"
@@ -74,7 +75,8 @@ var Keys = []Key{
 	{Name: SearchHeap, Default: "256m", Help: "Java heap of SonarQube's Elasticsearch; it also maps index files outside the heap (SonarQube's own: 512m)"},
 	{Name: Instance, Default: "sonarless", Help: "prefix for the containers, network and volumes"},
 	{Name: AgentTools, Default: "true", Help: "expose sonarless_* tools (scan, status, project, remote sync) to agents next to the SonarQube tools"},
-	{Name: AutoUpdate, Default: "true", Help: "check daily for a new sonarless-mcp release and MCP image, installed on next start"},
+	{Name: AutoUpdate, Default: "true", Help: "upgrade daily in the background to a signed sonarless-mcp release once it is a day old, and pull a newer MCP image"},
+	{Name: UpdateNotice, Default: "true", Help: "in a terminal, say on stderr (at most once a day) when a newer sonarless-mcp release exists"},
 	{Name: ProjectKey, Project: true, Help: "override the detected project key"},
 	{Name: ProjectName, Project: true, Help: "override the detected project name"},
 	{Name: Sources, Default: ".", Project: true, Help: "sonar.sources for CLI scans without sonar-project.properties"},

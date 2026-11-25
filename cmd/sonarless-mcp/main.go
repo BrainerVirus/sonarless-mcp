@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "dev" // set by the release build
+var version = "dev" // set by the release build (with commit and date, see version.go)
 
 // env bundles what most commands need.
 type env struct {
@@ -85,6 +85,10 @@ func main() {
 		SilenceErrors: true,
 		Version:       version,
 	}
+	// The update notice: a release check while the command runs, one line on
+	// stderr after it (see notice.go).
+	var notice *updateNotice
+	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) { notice = startNotice(cmd, os.Stderr) }
 
 	root.AddCommand(&cobra.Command{
 		Use:   "start",
@@ -289,7 +293,8 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 	root.AddCommand(setupCommand())
 	root.AddCommand(serveCommand())
 	root.AddCommand(ensureCommand())
-	root.AddCommand(updateCommand())
+	root.AddCommand(upgradeCommand())
+	root.AddCommand(versionCommand())
 	root.AddCommand(remoteCommand())
 
 	root.AddCommand(&cobra.Command{
@@ -309,7 +314,9 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 		},
 	})
 
-	if err := root.ExecuteContext(ctx); err != nil {
+	err := root.ExecuteContext(ctx)
+	notice.print()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}

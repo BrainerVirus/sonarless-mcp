@@ -28,7 +28,7 @@ Tokens never go through chat. Ask the user to run these themselves:
 
 - Add a remote: `sonarless-mcp remote add <name> --url <url> [--branch <branch>]` (hidden token prompt; needs a **User token** `squ_…`, not an analysis token).
 - Change it: `sonarless-mcp remote update <name> --token` / `--url <url>` / `--branch <branch>`.
-- Other: `sonarless-mcp remote list|remove <name>`, `sonarless-mcp setup` (register in AI clients), `sonarless-mcp update`, `sonarless-mcp config` (settings, e.g. `SONARLESS_SONARQUBE_VERSION` to match CI).
+- Other: `sonarless-mcp remote list|remove <name>`, `sonarless-mcp setup` (register in AI clients), `sonarless-mcp upgrade` (`--check` to see if one is due; it also upgrades itself in the background), `sonarless-mcp version`, `sonarless-mcp config` (settings, e.g. `SONARLESS_SONARQUBE_VERSION` to match CI).
 
 After adding/changing a remote, the AI client must be restarted to see it.
 
@@ -39,4 +39,5 @@ After adding/changing a remote, the AI client must be restarted to see it.
 - First call slow: SonarQube is starting (it stops itself after 30 min unused and resumes on demand).
 - What is running and how much memory it takes: `sonarless-mcp status` (`--json` for details: containers with memory, gateway sessions, stdio bridges, running scans). To free it all, the user runs `sonarless-mcp stop --all` (plain `stop` keeps the gateway).
 - Project not found on a server: scan it locally, or it isn't analyzed on that remote.
+- `sonarless-mcp upgrade` refused a release (signature or checksum check failed): the installed binary is unchanged; tell the user, don't work around it. `--allow-unsigned` is only for deliberately going back to a release from before signing (v0.8.1 or older).
 - Terminal says `sonarless-mcp` not found right after install: `rehash` (zsh), `hash -r` (bash), or a new tab (Warp).

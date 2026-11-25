@@ -13,10 +13,11 @@ jobs:
   commits:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
           cache: npm
@@ -39,8 +40,10 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - name: gofmt
@@ -61,14 +64,19 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v7
+          persist-credentials: false
+      # The Go cache stays: this job publishes nothing (--skip=publish), and the
+      # release job, which does, restores no cache.
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          version: "~> v2"
-          args: release --snapshot --clean --skip=publish
+          go-version-file: go.mod # zizmor: ignore[cache-poisoning]
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: v2.19.0 # the same GoReleaser as release.yml
+          # No cosign here: signing runs only in release.yml, with its OIDC identity.
+          args: release --snapshot --clean --skip=publish,sign
       # The single entry point (`install`) is valid sh and PowerShell; run it
       # the way users do, against the snapshot built above.
       - name: install (sh, piped like curl | sh)
@@ -103,3 +111,13 @@ jobs:
           $env:SONARLESS_MCP_BASE_URL = "$env:SONARLESS_MCP_SCRIPTS_BASE/dist"
           Get-Content -Raw ./install | Invoke-Expression
           & "$env:SONARLESS_MCP_INSTALL_DIR\sonarless-mcp.exe" --version
+      # The installers' cosign paths (signed, unsigned, before signing, bad
+      # signature, latest resolved through the API) against a stub cosign and
+      # file:// fixtures made from the snapshot; no network.
+      - name: install.sh signature matrix
+        if: runner.os != 'Windows'
+        run: sh .github/scripts/test-install-signature.sh dist
+      - name: install.ps1 signature matrix
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./.github/scripts/test-install-signature.ps1 -Dist dist
