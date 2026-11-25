@@ -10,7 +10,9 @@
 # Later upgrades: `sonarless-mcp upgrade`.
 #
 # Env: SONARLESS_MCP_VERSION (tag, default latest), SONARLESS_MCP_INSTALL_DIR,
-#      SONARLESS_MCP_BASE_URL (download base; for mirrors and tests),
+#      SONARLESS_MCP_RELEASES_URL, SONARLESS_MCP_RELEASES_API_URL (release
+#      download and API roots; for mirrors and tests),
+#      SONARLESS_MCP_BASE_URL (one release's download dir; for CI snapshots),
 #      SONARLESS_MCP_NO_SETUP=1 (install only).
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -28,9 +30,26 @@ $arch = switch ($env:PROCESSOR_ARCHITECTURE) {
     default { throw "unsupported CPU: $($env:PROCESSOR_ARCHITECTURE)" }
 }
 
-$base = if ($env:SONARLESS_MCP_BASE_URL) { $env:SONARLESS_MCP_BASE_URL }
-        elseif ($env:SONARLESS_MCP_VERSION) { "https://github.com/$repo/releases/download/$($env:SONARLESS_MCP_VERSION)" }
-        else { "https://github.com/$repo/releases/latest/download" }
+# Name the release before downloading it, so the archive, its checksums and
+# the signature check below are about one known tag. If the API can't be
+# reached (rate limit, proxy), fall back to releases/latest with the tag
+# unknown.
+$releasesUrl = if ($env:SONARLESS_MCP_RELEASES_URL) { $env:SONARLESS_MCP_RELEASES_URL } else { "https://github.com/$repo/releases" }
+$apiUrl = if ($env:SONARLESS_MCP_RELEASES_API_URL) { $env:SONARLESS_MCP_RELEASES_API_URL } else { "https://api.github.com/repos/$repo" }
+$tag = $env:SONARLESS_MCP_VERSION
+if ($env:SONARLESS_MCP_BASE_URL) {
+    $base = $env:SONARLESS_MCP_BASE_URL
+} else {
+    if (-not $tag) {
+        try {
+            $latest = if ($apiUrl -like 'file://*') { Get-Content -Raw ([uri]"$apiUrl/releases/latest").LocalPath | ConvertFrom-Json }
+                      else { Invoke-RestMethod -UseBasicParsing -Uri "$apiUrl/releases/latest" }
+            $tag = [string]$latest.tag_name
+        } catch { $tag = $null }
+        if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') { $tag = $null }
+    }
+    $base = if ($tag) { "$releasesUrl/download/$tag" } else { "$releasesUrl/latest/download" }
+}
 
 $asset = "sonarless-mcp_windows_$arch.zip"
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("sonarless-mcp-" + [guid]::NewGuid())
@@ -51,8 +70,8 @@ try {
         try { $bundle = Get-File 'checksums.txt.sigstore.json' } catch { $bundle = $null }
         # Releases up to v0.8.1 were published before signing existed.
         $preSigning = $false
-        if ($env:SONARLESS_MCP_VERSION) {
-            try { $preSigning = [version](($env:SONARLESS_MCP_VERSION.TrimStart('v')) -replace '-.*$', '') -le [version]'0.8.1' } catch { $preSigning = $false }
+        if ($tag) {
+            try { $preSigning = [version](($tag.TrimStart('v')) -replace '-.*$', '') -le [version]'0.8.1' } catch { $preSigning = $false }
         }
         if ($bundle) {
             & cosign verify-blob --bundle $bundle --certificate-oidc-issuer $signerIssuer `
@@ -60,7 +79,7 @@ try {
             if ($LASTEXITCODE -ne 0) { throw 'the signature of checksums.txt does not verify; nothing was installed' }
             Write-Host 'Verified the cosign signature of checksums.txt.'
         } elseif ($preSigning) {
-            Write-Host "$($env:SONARLESS_MCP_VERSION) was published before releases were signed; checking its SHA-256 only."
+            Write-Host "$tag was published before releases were signed; checking its SHA-256 only."
         } else {
             throw 'the release has no signature (checksums.txt.sigstore.json); nothing was installed'
         }

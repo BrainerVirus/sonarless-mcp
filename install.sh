@@ -10,7 +10,9 @@
 # client picker (`sonarless-mcp setup`). Later upgrades: `sonarless-mcp upgrade`.
 #
 # Env: SONARLESS_MCP_VERSION (tag, default latest), SONARLESS_MCP_INSTALL_DIR,
-#      SONARLESS_MCP_BASE_URL (download base; for mirrors and tests),
+#      SONARLESS_MCP_RELEASES_URL, SONARLESS_MCP_RELEASES_API_URL (release
+#      download and API roots; for mirrors and tests),
+#      SONARLESS_MCP_BASE_URL (one release's download dir; for CI snapshots),
 #      SONARLESS_MCP_NO_SETUP=1 (install only).
 set -eu
 
@@ -36,14 +38,6 @@ case "$(uname -m)" in
   *) die "unsupported CPU: $(uname -m)" ;;
 esac
 
-if [ -n "${SONARLESS_MCP_BASE_URL:-}" ]; then
-  base="$SONARLESS_MCP_BASE_URL"
-elif [ -n "${SONARLESS_MCP_VERSION:-}" ]; then
-  base="https://github.com/$REPO/releases/download/$SONARLESS_MCP_VERSION"
-else
-  base="https://github.com/$REPO/releases/latest/download"
-fi
-
 if command -v curl >/dev/null 2>&1; then
   fetch() { curl -fsSL "$1" -o "$2"; }
 elif command -v wget >/dev/null 2>&1; then
@@ -63,7 +57,28 @@ asset="sonarless-mcp_${os}_${arch}.tar.gz"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-say "Detected $os/$arch. Downloading $asset..."
+# Name the release before downloading it, so the archive, its checksums and
+# the signature check below are about one known tag. If the API can't be
+# reached (rate limit, proxy), fall back to releases/latest with the tag
+# unknown.
+releases_url="${SONARLESS_MCP_RELEASES_URL:-https://github.com/$REPO/releases}"
+api_url="${SONARLESS_MCP_RELEASES_API_URL:-https://api.github.com/repos/$REPO}"
+tag="${SONARLESS_MCP_VERSION:-}"
+if [ -n "${SONARLESS_MCP_BASE_URL:-}" ]; then
+  base="$SONARLESS_MCP_BASE_URL"
+else
+  if [ -z "$tag" ] && fetch "$api_url/releases/latest" "$tmp/latest.json" 2>/dev/null; then
+    tag="$(tr ',' '\n' <"$tmp/latest.json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' || tag=""
+  fi
+  if [ -n "$tag" ]; then
+    base="$releases_url/download/$tag"
+  else
+    base="$releases_url/latest/download"
+  fi
+fi
+
+say "Detected $os/$arch. Downloading $asset${tag:+ ($tag)}..."
 fetch "$base/$asset" "$tmp/$asset" || die "download failed: $base/$asset"
 fetch "$base/checksums.txt" "$tmp/checksums.txt" || die "download failed: $base/checksums.txt"
 
@@ -83,8 +98,8 @@ if command -v cosign >/dev/null 2>&1; then
       "$tmp/checksums.txt" >/dev/null 2>&1 ||
       die "the signature of checksums.txt does not verify; nothing was installed"
     say "Verified the cosign signature of checksums.txt."
-  elif pre_signing "${SONARLESS_MCP_VERSION:-}"; then
-    say "$SONARLESS_MCP_VERSION was published before releases were signed; checking its SHA-256 only."
+  elif pre_signing "$tag"; then
+    say "$tag was published before releases were signed; checking its SHA-256 only."
   else
     die "the release has no signature (checksums.txt.sigstore.json); nothing was installed"
   fi
