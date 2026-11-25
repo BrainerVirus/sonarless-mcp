@@ -3,15 +3,13 @@ name: release
 # Every push to main: full CI, then semantic-release decides from the
 # Conventional Commits whether to cut a version. A release updates
 # CHANGELOG.md, tags vX.Y.Z, publishes the GitHub Release with generated
-# notes, and GoReleaser attaches the binaries for every OS/CPU.
+# notes, and GoReleaser attaches the binaries for every OS/CPU plus a cosign
+# keyless signature of checksums.txt (checksums.txt.sigstore.json).
 on:
   push:
     branches: [main]
 
-permissions:
-  contents: write # tag, CHANGELOG commit, GitHub Release + assets
-  issues: write # semantic-release "released in" comments
-  pull-requests: write
+permissions: {}
 
 concurrency:
   group: release
@@ -19,38 +17,48 @@ concurrency:
 
 jobs:
   ci:
+    permissions:
+      contents: read
     uses: ./.github/workflows/ci.yml
 
   release:
     needs: ci
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write # tag, CHANGELOG commit, GitHub Release + assets
       issues: write # semantic-release "released in" comments
       pull-requests: write
       id-token: write # cosign keyless: sign checksums.txt with this workflow's OIDC identity
+    # This job holds a write token and the signing identity, so every action is
+    # pinned to a commit and no step restores a cache.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v7
+          persist-credentials: false # semantic-release pushes with GITHUB_TOKEN itself
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v7
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
-          cache: npm
+          package-manager-cache: false
       - run: npm ci --ignore-scripts
-      # GoReleaser's `signs` runs cosign on checksums.txt. The certificate
-      # names https://github.com/BrainerVirus/sonarless-mcp/.github/workflows/release.yml@refs/heads/main
+      # GoReleaser's `signs` runs cosign on checksums.txt. semantic-release runs
+      # on the push to main, so the certificate names
+      # https://github.com/BrainerVirus/sonarless-mcp/.github/workflows/release.yml@refs/heads/main
       # (issuer https://token.actions.githubusercontent.com), which
-      # internal/update.ReleaseIdentity pins.
+      # internal/update.ReleaseIdentity pins. Renaming this file or the branch
+      # breaks `sonarless-mcp upgrade` for every installed binary.
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: v3.1.4
-      - uses: goreleaser/goreleaser-action@v7
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
-          version: "~> v2"
+          distribution: goreleaser
+          version: v2.19.0 # exact, never a range: what signs the release is reviewed
           install-only: true
       - name: semantic-release
         run: npx semantic-release
