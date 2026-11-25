@@ -1,0 +1,42 @@
+{
+  "id": "ci-gate",
+  "about": "CI's quality gate: get_project_quality_gate_status with server work",
+  "prompt": "Does our CI SonarQube server show the quality gate passing for this project?",
+  "maxTurns": 8,
+  "files": {
+    "sonar-project.properties": "sonar.projectKey=demo-app\nsonar.projectName=Demo App\nsonar.sources=src\n",
+    "package.json": "{\n  \"name\": \"demo-app\",\n  \"version\": \"1.4.0\",\n  \"scripts\": {\"test\": \"vitest run\"}\n}\n",
+    "src/payment.ts": "export function charge(amount: number): number {\n  let fee = 0;\n  fee = amount * 0.02;\n  const unused = amount;\n  return amount + fee;\n}\n",
+    "src/app.ts": "import { charge } from './payment';\n\nconsole.log(charge(100));\n"
+  },
+  "fixtures": {
+    "rules": [
+      {
+        "match": "^mcp get_project_quality_gate_status .*\"server\":\"work\"",
+        "stdout": "{\"projectStatus\":{\"status\":\"ERROR\",\"conditions\":[{\"status\":\"ERROR\",\"metricKey\":\"new_reliability_rating\",\"actualValue\":\"3\",\"errorThreshold\":\"1\"}]}}"
+      },
+      {
+        "match": "^mcp get_project_quality_gate_status",
+        "stdout": "{\"projectStatus\":{\"status\":\"OK\",\"conditions\":[]}}"
+      }
+    ]
+  },
+  "require": [
+    {
+      "name": "reads the gate on the remote",
+      "match": [
+        "^mcp get_project_quality_gate_status ",
+        "\"server\":\"work\""
+      ]
+    }
+  ],
+  "forbid": [
+    {
+      "name": "scans locally",
+      "match": [
+        "^(mcp sonarless_scan|sonarless-mcp scan)( |$)"
+      ]
+    }
+  ],
+  "answer": "fail|error|not pass|doesn't pass|does not pass|reliability"
+}

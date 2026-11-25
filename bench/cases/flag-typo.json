@@ -1,0 +1,34 @@
+{
+  "id": "flag-typo",
+  "about": "a usage error names the flag: retry scan with --fail-on-gate",
+  "prompt": "Run sonarless-mcp scan --fail-on-gates in this project and tell me what the exit status says about the quality gate.",
+  "maxTurns": 6,
+  "files": {
+    "sonar-project.properties": "sonar.projectKey=demo-app\nsonar.projectName=Demo App\nsonar.sources=src\n",
+    "package.json": "{\n  \"name\": \"demo-app\",\n  \"version\": \"1.4.0\",\n  \"scripts\": {\"test\": \"vitest run\"}\n}\n",
+    "src/payment.ts": "export function charge(amount: number): number {\n  let fee = 0;\n  fee = amount * 0.02;\n  const unused = amount;\n  return amount + fee;\n}\n",
+    "src/app.ts": "import { charge } from './payment';\n\nconsole.log(charge(100));\n"
+  },
+  "require": [
+    {
+      "name": "retries with the hinted flag",
+      "match": [
+        "^sonarless-mcp scan .*--fail-on-gate( |$)"
+      ]
+    }
+  ],
+  "forbid": [
+    {
+      "name": "drops the gate check",
+      "match": [
+        "^sonarless-mcp scan"
+      ],
+      "not": [
+        "--fail-on-gate",
+        "--help"
+      ],
+      "times": 1
+    }
+  ],
+  "answer": "pass"
+}

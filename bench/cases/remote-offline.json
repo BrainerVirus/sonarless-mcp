@@ -1,0 +1,37 @@
+{
+  "id": "remote-offline",
+  "about": "an unreachable remote: say so and carry on with local",
+  "prompt": "What security hotspots does CI's SonarQube report for this project?",
+  "maxTurns": 8,
+  "files": {
+    "sonar-project.properties": "sonar.projectKey=demo-app\nsonar.projectName=Demo App\nsonar.sources=src\n",
+    "package.json": "{\n  \"name\": \"demo-app\",\n  \"version\": \"1.4.0\",\n  \"scripts\": {\"test\": \"vitest run\"}\n}\n",
+    "src/payment.ts": "export function charge(amount: number): number {\n  let fee = 0;\n  fee = amount * 0.02;\n  const unused = amount;\n  return amount + fee;\n}\n",
+    "src/app.ts": "import { charge } from './payment';\n\nconsole.log(charge(100));\n"
+  },
+  "fixtures": {
+    "rules": [
+      {
+        "match": "^mcp search_security_hotspots .*\"server\":\"work\"",
+        "stdout": "remote \"work\" (http://sonar.example.com) is unreachable: dial tcp 10.0.0.5:9000: i/o timeout",
+        "exit": 1
+      },
+      {
+        "match": "^mcp search_security_hotspots",
+        "stdout": "{\"hotspots\":[{\"key\":\"H1\",\"component\":\"demo-app:src/payment.ts\",\"securityCategory\":\"weak-cryptography\",\"vulnerabilityProbability\":\"MEDIUM\",\"line\":3}],\"paging\":{\"total\":1}}"
+      }
+    ]
+  },
+  "require": [
+    {
+      "name": "falls back to local",
+      "match": [
+        "^mcp search_security_hotspots "
+      ],
+      "not": [
+        "\"server\":\"work\""
+      ]
+    }
+  ],
+  "answer": "unreachable|offline|VPN|not reachable|could not reach|couldn't reach"
+}

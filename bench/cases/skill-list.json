@@ -1,0 +1,32 @@
+{
+  "id": "skill-list",
+  "about": "sonarless-mcp skill list, without syncing",
+  "prompt": "Are the sonarless-mcp agent skill copies installed on this machine up to date? Only check, change nothing.",
+  "maxTurns": 6,
+  "files": {
+    "sonar-project.properties": "sonar.projectKey=demo-app\nsonar.projectName=Demo App\nsonar.sources=src\n",
+    "package.json": "{\n  \"name\": \"demo-app\",\n  \"version\": \"1.4.0\",\n  \"scripts\": {\"test\": \"vitest run\"}\n}\n",
+    "src/payment.ts": "export function charge(amount: number): number {\n  let fee = 0;\n  fee = amount * 0.02;\n  const unused = amount;\n  return amount + fee;\n}\n",
+    "src/app.ts": "import { charge } from './payment';\n\nconsole.log(charge(100));\n"
+  },
+  "require": [
+    {
+      "name": "lists the skill copies",
+      "match": [
+        "^sonarless-mcp skill list"
+      ]
+    }
+  ],
+  "forbid": [
+    {
+      "name": "changes skill copies",
+      "match": [
+        "^sonarless-mcp skill (sync|install|uninstall)"
+      ],
+      "not": [
+        "--help"
+      ]
+    }
+  ],
+  "answer": "opencode|outdated|0\\.12"
+}

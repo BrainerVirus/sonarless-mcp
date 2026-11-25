@@ -1,0 +1,47 @@
+{
+  "id": "file-issues",
+  "about": "local issues of one file through search_sonar_issues_in_projects",
+  "prompt": "Which Sonar issues does src/payment.ts have in my local SonarQube?",
+  "maxTurns": 8,
+  "files": {
+    "sonar-project.properties": "sonar.projectKey=demo-app\nsonar.projectName=Demo App\nsonar.sources=src\n",
+    "package.json": "{\n  \"name\": \"demo-app\",\n  \"version\": \"1.4.0\",\n  \"scripts\": {\"test\": \"vitest run\"}\n}\n",
+    "src/payment.ts": "export function charge(amount: number): number {\n  let fee = 0;\n  fee = amount * 0.02;\n  const unused = amount;\n  return amount + fee;\n}\n",
+    "src/app.ts": "import { charge } from './payment';\n\nconsole.log(charge(100));\n"
+  },
+  "fixtures": {
+    "rules": [
+      {
+        "match": "^mcp search_sonar_issues_in_projects",
+        "stdout": "{\"issues\": [{\"key\": \"AZ1\", \"rule\": \"typescript:S1854\", \"severity\": \"MAJOR\", \"component\": \"demo-app:src/payment.ts\", \"line\": 2, \"message\": \"Remove this useless assignment to variable \\\"fee\\\".\"}, {\"key\": \"AZ2\", \"rule\": \"typescript:S1481\", \"severity\": \"MINOR\", \"component\": \"demo-app:src/payment.ts\", \"line\": 4, \"message\": \"Remove the declaration of the unused 'unused' variable.\"}], \"paging\": {\"pageIndex\": 1, \"pageSize\": 100, \"total\": 2}}"
+      }
+    ]
+  },
+  "require": [
+    {
+      "name": "searches the file's issues locally",
+      "match": [
+        "^mcp search_sonar_issues_in_projects ",
+        "payment\\.ts"
+      ],
+      "not": [
+        "\"server\":\"work\""
+      ]
+    }
+  ],
+  "forbid": [
+    {
+      "name": "queries the remote",
+      "match": [
+        "\"server\":\"work\""
+      ]
+    },
+    {
+      "name": "rescans to read issues",
+      "match": [
+        "^(mcp sonarless_scan|sonarless-mcp scan)( |$)"
+      ]
+    }
+  ],
+  "answer": "useless assignment|S1854|fee"
+}
