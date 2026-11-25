@@ -183,8 +183,14 @@ Without the checksum a damaged archive is mapped as if it were whole.
 `-XX:+VerifySharedSpaces` costs about 60 ms per JVM start (`java -version`
 with the archive, 10 rounds of 5 runs: 76 to 86 ms without, 129 to 152 ms
 with), against the 1.5 to 2 s the archive saves, so sonarless-mcp turns it on.
-A missing file is the one case the JVM does not report: sonarless-mcp checks
-that the volume exists before it mounts it, and builds again when it does not.
+A missing file is the one case the JVM does not report. So after every start
+with the archive sonarless-mcp also checks that the JVM mapped it: one
+`docker exec <instance>-mcp sh -c 'grep -l -F /cds/<key>.jsa /proc/[0-9]*/maps'`
+(busybox sh and grep are in the image; without them it reads the init's
+`/proc/1/task/1/children` and the JVM's `/proc/<pid>/maps` with `cat`). Only a
+start seen mapping the archive is reported as `used`; one that did not map it
+records the archive as failed. A removed volume is caught earlier: the start
+checks that the volume exists before it mounts it, and builds again when not.
 
 **Shipped numbers.** The archive the `<instance>-cds` container built
 (11,698 classes, 95 MiB), run the way the MCP container runs it
@@ -210,7 +216,11 @@ mapped; `status`: `used`); 4 bytes overwritten in the archive gave
 `failed`, and no rebuild on the following start; deleting the record file
 rebuilt it; `SONARLESS_MCP_APPCDS=false` recreated the container without the
 archive and started no build; another MCP image got its own key, a plain
-start and its own build, which replaced the other image's archive.
+start and its own build, which replaced the other image's archive. With the
+mapping probe: a start with the archive recorded that start as mapped
+(`appcds`: `used`); the archive file deleted from the volume (the volume
+kept) gave `failed: the JVM did not map /cds/<key>.jsa`; `appcds rebuild`
+built it again in about 10 s, and the next start was `used` again.
 
 ## Repeat the measurements
 

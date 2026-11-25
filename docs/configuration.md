@@ -114,11 +114,25 @@ memory ([measured](performance.md#appcds-for-the-mcp-jvm)).
 - **The training start needs the local SonarQube**, as every MCP start does
   (the server checks it before it answers); the build only runs right after
   the MCP server got ready.
-- **`status` shows the state**: `none` (built after the next start),
-  `building`, `ready` (used from the next start), `used`, `failed` (with the
-  reason and when it is tried again) or `disabled`. The last build's outcome is
-  `<cache dir>/<instance>-cds.json`; deleting that file makes the next start
-  try again.
+- **`used` is checked, not assumed.** After a start with the archive,
+  sonarless-mcp reads the JVM's log for a rejection and then looks in
+  `/proc/<pid>/maps` inside the container for the mapped file. An archive the
+  JVM rejected or did not map (a missing file, say) is recorded as failed with
+  the reason, and the next start runs plain.
+- **`status` and `sonarless-mcp appcds` show the state**: `none` (built after
+  the next start), `building`, `ready` (used from the next start), `used`,
+  `failed` (with the reason and when it is tried again) or `disabled`. The
+  last build's outcome is `<cache dir>/<instance>-cds.json`.
+
+```sh
+sonarless-mcp appcds                   # the archive's state
+sonarless-mcp appcds rebuild           # build it again now (starts SonarQube if needed), wait for it
+sonarless-mcp appcds rebuild --no-wait # start the build and return
+```
+
+`appcds rebuild` retries at once what a start would leave for a day (a failed
+build, a rejected archive). The MCP server uses the new archive from its next
+start: `sonarless-mcp stop` or the idle stop.
 
 `SONARLESS_MCP_APPCDS=false` recreates the MCP containers without the archive
 on next use and builds none; `docker volume rm <instance>-cds` frees its disk
