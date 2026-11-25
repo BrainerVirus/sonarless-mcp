@@ -1,9 +1,9 @@
 {
   "case": "add-remote",
   "model": "claude-haiku-4-5",
-  "key": "1-f190b737eb464324-9c8663e977ed8242-claude-haiku-4-5",
-  "passes": 1,
-  "graded": 1,
+  "key": "1-f190b737eb464324-0445926b0757f8a0-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
   "pass": true,
   "runs": [
     {
@@ -12,18 +12,59 @@
       "turns": 3,
       "tokens": {
         "input": 20,
-        "output": 1064,
-        "cacheCreation": 10085,
-        "cacheRead": 33062
+        "output": 1010,
+        "cacheCreation": 9815,
+        "cacheRead": 32938
       },
-      "costUSD": 0.0288162,
-      "durationMs": 13730,
+      "costUSD": 0.0279938,
+      "durationMs": 12223,
       "skillLoaded": true,
       "skillListed": true,
       "mcpConnected": true,
       "commands": null,
       "calls": null,
-      "answer": "I see from the sonarless-mcp documentation that tokens should never be passed through chat or commands. Instead, please run this command in your terminal — it will prompt you for the token interactively:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nWhen prompted, enter your token: `\u003ctoken\u003e`\n\nThis keeps the token out of command history and chat logs. Once added, you can verify it with:\n\n```bash\nsonarless-mcp remote list\n```"
+      "answer": "Perfect! According to the sonarless-mcp skill, tokens should never go through chat. Instead, please run this command in your own terminal:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nIt will prompt you for the token interactively (the `squ_...` token you provided), which is handled securely by your terminal.\n\nOnce you've added the remote, you can verify it with:\n```bash\nsonarless-mcp remote list\n```\n\nAfter that, you'll be able to query the CI SonarQube using the MCP tools with `server: \"ci\"` to see what issues and quality gates CI found."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 6,
+      "tokens": {
+        "input": 50,
+        "output": 1601,
+        "cacheCreation": 11173,
+        "cacheRead": 118866
+      },
+      "costUSD": 0.0422876,
+      "durationMs": 19503,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "find \u003cworld\u003e/project -type f -name \"*config*\" -o -name \"*remote*\" -o -name \".sonarless*\" -o -name \"*sonar*\" 2\u003e/dev/null | head -20",
+        "ls -la \u003cworld\u003e/project/.claude/skills/sonarless-mcp/"
+      ],
+      "calls": null,
+      "answer": "Perfect! To add your CI SonarQube remote, run this command in your terminal:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nWhen prompted, paste your token (`\u003ctoken\u003e`). The token stays hidden during input and is never shown in the command or chat.\n\nOnce added, you can verify it worked with:\n```bash\nsonarless-mcp remote list\n```\n\nAfter that, you'll be able to query the CI server using `server: \"ci\"` in MCP tool calls and compare local results with what CI found."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 29,
+        "output": 1343,
+        "cacheCreation": 10462,
+        "cacheRead": 54317
+      },
+      "costUSD": 0.033099699999999996,
+      "durationMs": 18391,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": null,
+      "answer": "Perfect! To add your CI SonarQube as a remote, run this command in your terminal:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nYou'll be prompted for the token (it won't be echoed to the terminal). Paste your token when prompted: `\u003ctoken\u003e`\n\nThe token is kept securely in your local sonarless-mcp configuration and never sent through chat.\n\nOnce added, you can verify it worked with:\n```bash\nsonarless-mcp remote list\n```\n\nAfter that, you'll be able to query the remote CI SonarQube using the `server: \"ci\"` parameter in MCP tools to compare results, sync quality gates, or check what CI found."
     }
   ]
 }

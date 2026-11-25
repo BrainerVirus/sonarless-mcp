@@ -1,0 +1,70 @@
+{
+  "case": "ci-gate",
+  "model": "claude-haiku-4-5",
+  "key": "1-779405865eca99d4-none-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 1,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: reads the gate on the remote",
+      "failures": [
+        "require: reads the gate on the remote",
+        "answer",
+        "max turns"
+      ],
+      "turns": 9,
+      "tokens": {
+        "input": 70,
+        "output": 1557,
+        "cacheCreation": 12071,
+        "cacheRead": 167552
+      },
+      "costUSD": 0.048752199999999996,
+      "durationMs": 21556,
+      "skillLoaded": false,
+      "skillListed": false,
+      "mcpConnected": true,
+      "commands": [
+        "python3 -c \"\nimport json\nimport subprocess\n\n# Call the MCP tool via sonarless-mcp\nresult = subprocess.run(['sonarless-mcp', 'get_project_quality_gate_status', '--server', 'work', '--projectKey', 'demo-app', '--format', 'json'], capture_output=True, text=True)\nprint(result.stdout)\nif result.stderr:\n    print('STDERR:', result.stderr, file=__import__('sys').stderr)\n\"",
+        "sonarless-mcp get_project_quality_gate_status --server work --projectKey demo-app",
+        "sonarless-mcp --help",
+        "sonarless-mcp remote list",
+        "sonarless-mcp mcp --help 2\u003e\u00261 | head -20",
+        "curl -s http://127.0.0.1:9233/tools 2\u003e/dev/null | head -50 || echo \"Gateway not running yet\""
+      ],
+      "calls": [
+        {
+          "argv": [
+            "get_project_quality_gate_status",
+            "--server",
+            "work",
+            "--projectKey",
+            "demo-app"
+          ],
+          "exit": 1
+        },
+        {
+          "argv": [
+            "--help"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "list"
+          ],
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "python3 -c \"\nimport json\nimport subprocess\n\n# Call the MCP tool via sonarless-mcp\nresult = subprocess.run(['sonarless-mcp', 'get_project_quality_gate_status', '--server', 'work', '--projectKey', 'demo-app', '--format', 'json'], capture_output=True, text=True)\nprint(result.stdout)\nif result.stderr:\n    print('STDERR:', result.stderr, file=__import__('sys').stderr)\n\"",
+        "curl -s http://127.0.0.1:9233/tools 2\u003e/dev/null | head -50 || echo \"Gateway not running yet\""
+      ],
+      "answer": ""
+    }
+  ]
+}

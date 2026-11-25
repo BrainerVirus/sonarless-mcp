@@ -1,0 +1,45 @@
+{
+  "case": "file-issues",
+  "model": "claude-haiku-4-5",
+  "key": "1-4134af3d13572a03-none-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 6,
+      "tokens": {
+        "input": 56,
+        "output": 1006,
+        "cacheCreation": 10286,
+        "cacheRead": 119670
+      },
+      "costUSD": 0.037625000000000006,
+      "durationMs": 13372,
+      "skillLoaded": false,
+      "skillListed": false,
+      "mcpConnected": true,
+      "commands": [
+        "mcp__sonarqube__sonarless_status"
+      ],
+      "calls": [
+        {
+          "tool": "search_sonar_issues_in_projects",
+          "args": {
+            "files": [
+              "src/payment.ts"
+            ],
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "mcp__sonarqube__sonarless_status"
+      ],
+      "answer": "Your local SonarQube found **2 issues** in `src/payment.ts`:\n\n1. **Line 2** — `typescript:S1854` (MAJOR)  \n   \"Remove this useless assignment to variable \\\"fee\\\".\"\n\n2. **Line 4** — `typescript:S1481` (MINOR)  \n   \"Remove the declaration of the unused 'unused' variable.\"\n\nBoth are code-quality issues related to unused/useless assignments and variables. Would you like me to view the file and fix them?"
+    }
+  ]
+}

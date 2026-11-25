@@ -1,0 +1,182 @@
+{
+  "model": "claude-haiku-4-5",
+  "skillHash": "none",
+  "skillBytes": 0,
+  "cases": [
+    {
+      "case": "add-remote",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "answer"
+      ],
+      "meanTurns": 7,
+      "meanTotalInput": 136800,
+      "sdTotalInput": 0,
+      "meanOutput": 1650,
+      "meanDurationMs": 21705,
+      "costUSD": 0.0451
+    },
+    {
+      "case": "ci-gate",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "require: reads the gate on the remote"
+      ],
+      "meanTurns": 9,
+      "meanTotalInput": 179693,
+      "sdTotalInput": 0,
+      "meanOutput": 1557,
+      "meanDurationMs": 21556,
+      "costUSD": 0.0488
+    },
+    {
+      "case": "compare-ci",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "meanTurns": 12,
+      "meanTotalInput": 132852,
+      "sdTotalInput": 0,
+      "meanOutput": 1763,
+      "meanDurationMs": 22665,
+      "costUSD": 0.0433
+    },
+    {
+      "case": "file-issues",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "meanTurns": 6,
+      "meanTotalInput": 130012,
+      "sdTotalInput": 0,
+      "meanOutput": 1006,
+      "meanDurationMs": 13372,
+      "costUSD": 0.0376
+    },
+    {
+      "case": "flag-typo",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "meanTurns": 3,
+      "meanTotalInput": 61589,
+      "sdTotalInput": 0,
+      "meanOutput": 346,
+      "meanDurationMs": 6130,
+      "costUSD": 0.0233
+    },
+    {
+      "case": "pass-ci-gate",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "require: syncs CI's gate and rules"
+      ],
+      "meanTurns": 6,
+      "meanTotalInput": 107105,
+      "sdTotalInput": 0,
+      "meanOutput": 920,
+      "meanDurationMs": 12913,
+      "costUSD": 0.0333
+    },
+    {
+      "case": "remote-offline",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "require: falls back to local"
+      ],
+      "meanTurns": 4,
+      "meanTotalInput": 83810,
+      "sdTotalInput": 0,
+      "meanOutput": 795,
+      "meanDurationMs": 11929,
+      "costUSD": 0.0291
+    },
+    {
+      "case": "scan-gate",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "meanTurns": 5,
+      "meanTotalInput": 84913,
+      "sdTotalInput": 0,
+      "meanOutput": 997,
+      "meanDurationMs": 13038,
+      "costUSD": 0.0312
+    },
+    {
+      "case": "skill-list",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "require: lists the skill copies"
+      ],
+      "meanTurns": 6,
+      "meanTotalInput": 126987,
+      "sdTotalInput": 0,
+      "meanOutput": 1077,
+      "meanDurationMs": 16365,
+      "costUSD": 0.0357
+    },
+    {
+      "case": "upgrade-check",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "require: checks for a release"
+      ],
+      "meanTurns": 3,
+      "meanTotalInput": 61895,
+      "sdTotalInput": 0,
+      "meanOutput": 611,
+      "meanDurationMs": 8592,
+      "costUSD": 0.0251
+    }
+  ],
+  "totals": {
+    "cases": 10,
+    "casesPassed": 4,
+    "runs": 10,
+    "graded": 10,
+    "passes": 4,
+    "passRate": 0.4,
+    "tokens": {
+      "input": 450,
+      "output": 10722,
+      "cacheCreation": 98959,
+      "cacheRead": 1006247
+    },
+    "totalInput": 1105656,
+    "meanTotalInputPerRun": 110565.6,
+    "costUSD": 0.3526
+  }
+}
