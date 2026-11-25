@@ -44,7 +44,13 @@ func newUpgradeFixture(t *testing.T, current string, releases ...*updatetest.Rel
 	fx := &upgradeFixture{cacheDir: filepath.Join(home, "cache")}
 	s := updatetest.NewSigstore(t)
 	fx.srv = updatetest.NewServer(t, s, releases...)
-	fx.exe = filepath.Join(t.TempDir(), "sonarless-mcp")
+	// Upgrade reports the symlink-resolved path; macOS temp dirs sit behind
+	// /var -> /private/var, so resolve the fixture dir the same way.
+	binDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.exe = filepath.Join(binDir, "sonarless-mcp")
 	if err := os.WriteFile(fx.exe, []byte("installed "+current), 0o755); err != nil {
 		t.Fatal(err)
 	}
