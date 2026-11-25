@@ -32,6 +32,7 @@ in the README and LICENSE.
 | `internal/clients/` | AI client detection, config editing (direct HTTP entry or stdio shim per client), gateway login autostart (systemd, launchd, Windows Run key), the embedded agent skill (`skill/SKILL.md`) |
 | `internal/tui/` | the setup picker (bubbletea) |
 | `docs/` | user docs, one page per topic; `README.md` stays the fast path and links them |
+| `scripts/perf/` | isolated memory and startup measurements (`SONARLESS_INSTANCE=perftest` only; `env.sh` refuses any other instance); method and numbers in `docs/performance.md` |
 | `bench/` | the weak-model skill bench (`go run ./bench`, never in CI): a fake sonarless-mcp CLI and MCP server, cases and stored results |
 | `install` | single entry script, valid sh and PowerShell; hands off to the platform installer |
 | `install.sh`, `install.ps1` | platform installers (download, verify, install, then `setup`) |
