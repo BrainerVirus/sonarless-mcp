@@ -2,7 +2,7 @@
   "case": "upgrade-check",
   "model": "claude-haiku-4-5",
   "key": "1-bd05bb69d40ee6b4-08d02c6a1127a519-claude-haiku-4-5",
-  "passes": 2,
+  "passes": 3,
   "graded": 3,
   "pass": true,
   "runs": [
@@ -11,13 +11,13 @@
       "status": "pass",
       "turns": 4,
       "tokens": {
-        "input": 27,
-        "output": 438,
-        "cacheCreation": 9729,
-        "cacheRead": 55159
+        "input": 28,
+        "output": 433,
+        "cacheCreation": 9763,
+        "cacheRead": 55205
       },
-      "costUSD": 0.027190899999999997,
-      "durationMs": 7339,
+      "costUSD": 0.0272395,
+      "durationMs": 7189,
       "skillLoaded": true,
       "skillListed": true,
       "mcpConnected": true,
@@ -33,20 +33,20 @@
           "exit": 0
         }
       ],
-      "answer": "Yes, there's a newer version available. You have **v0.14.2** installed, and **v0.15.0** is available. If you'd like to upgrade, you can run `sonarless-mcp upgrade` when you're ready."
+      "answer": "Yes, there's a newer release available. You have **v0.14.2** installed, and **v0.15.0** is available."
     },
     {
       "run": 2,
       "status": "pass",
       "turns": 4,
       "tokens": {
-        "input": 28,
-        "output": 757,
-        "cacheCreation": 10052,
-        "cacheRead": 55293
+        "input": 27,
+        "output": 466,
+        "cacheCreation": 9769,
+        "cacheRead": 55184
       },
-      "costUSD": 0.0294463,
-      "durationMs": 10421,
+      "costUSD": 0.0274134,
+      "durationMs": 7759,
       "skillLoaded": true,
       "skillListed": true,
       "mcpConnected": true,
@@ -62,62 +62,36 @@
           "exit": 0
         }
       ],
-      "answer": "Yes, there's a newer release available. You have **v0.14.2** installed, and **v0.15.0** is available. \n\nYou can upgrade when ready with `sonarless-mcp upgrade` (or the binaries will auto-upgrade a day after release)."
+      "answer": "Yes, there's a newer version available. You have **v0.14.2** installed, and **v0.15.0** is available. You can upgrade it whenever you're ready by running `sonarless-mcp upgrade`."
     },
     {
       "run": 3,
-      "status": "fail",
-      "failed": "require: checks for a release",
-      "failures": [
-        "require: checks for a release",
-        "answer",
-        "max turns"
-      ],
-      "turns": 7,
+      "status": "pass",
+      "turns": 4,
       "tokens": {
-        "input": 52,
-        "output": 1056,
-        "cacheCreation": 10245,
-        "cacheRead": 119026
+        "input": 28,
+        "output": 509,
+        "cacheCreation": 9843,
+        "cacheRead": 55296
       },
-      "costUSD": 0.037724600000000004,
-      "durationMs": 15056,
+      "costUSD": 0.027788600000000004,
+      "durationMs": 8177,
       "skillLoaded": true,
       "skillListed": true,
       "mcpConnected": true,
       "commands": [
-        "sonarless-mcp version 2\u003e\u00261",
-        "sonarless-mcp check-update 2\u003e\u00261",
-        "sonarless-mcp --help 2\u003e\u00261 | head -50",
-        "sonarless-mcp status 2\u003e\u00261"
+        "sonarless-mcp upgrade --check"
       ],
       "calls": [
         {
           "argv": [
-            "version"
-          ],
-          "exit": 0
-        },
-        {
-          "argv": [
-            "check-update"
-          ],
-          "exit": 1
-        },
-        {
-          "argv": [
-            "--help"
-          ],
-          "exit": 0
-        },
-        {
-          "argv": [
-            "status"
+            "upgrade",
+            "--check"
           ],
           "exit": 0
         }
       ],
-      "answer": ""
+      "answer": "Yes, there's a newer release available. You have **v0.14.2** installed and **v0.15.0** is available. Run `sonarless-mcp upgrade` when you're ready to install it."
     }
   ]
 }

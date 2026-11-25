@@ -1,0 +1,42 @@
+{
+  "model": "claude-haiku-4-5",
+  "skillHash": "08d02c6a1127a519",
+  "skillBytes": 5340,
+  "cases": [
+    {
+      "case": "remote-offline",
+      "pass": false,
+      "passes": 1,
+      "graded": 3,
+      "notLoaded": 3,
+      "skillLoaded": 0,
+      "failed": [
+        "require: falls back to local",
+        "require: falls back to local"
+      ],
+      "meanTurns": 3.3,
+      "meanTotalInput": 69767,
+      "sdTotalInput": 12249.1,
+      "meanOutput": 714.3,
+      "meanDurationMs": 10787.7,
+      "costUSD": 0.0811
+    }
+  ],
+  "totals": {
+    "cases": 1,
+    "casesPassed": 0,
+    "runs": 3,
+    "graded": 3,
+    "passes": 1,
+    "passRate": 0.3333,
+    "tokens": {
+      "input": 92,
+      "output": 2143,
+      "cacheCreation": 26005,
+      "cacheRead": 183204
+    },
+    "totalInput": 209301,
+    "meanTotalInputPerRun": 69767,
+    "costUSD": 0.0811
+  }
+}

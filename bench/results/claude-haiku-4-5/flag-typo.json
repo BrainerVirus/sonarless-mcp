@@ -9,60 +9,15 @@
     {
       "run": 1,
       "status": "pass",
-      "turns": 4,
-      "tokens": {
-        "input": 34,
-        "output": 524,
-        "cacheCreation": 8507,
-        "cacheRead": 74632
-      },
-      "costUSD": 0.027131200000000005,
-      "durationMs": 7910,
-      "skillLoaded": false,
-      "skillListed": true,
-      "mcpConnected": true,
-      "commands": [
-        "sonarless-mcp scan --fail-on-gates",
-        "sonarless-mcp scan --fail-on-gate",
-        "sonarless-mcp scan --fail-on-gate; echo \"Exit status: $?\""
-      ],
-      "calls": [
-        {
-          "argv": [
-            "scan",
-            "--fail-on-gates"
-          ],
-          "exit": 1
-        },
-        {
-          "argv": [
-            "scan",
-            "--fail-on-gate"
-          ],
-          "exit": 0
-        },
-        {
-          "argv": [
-            "scan",
-            "--fail-on-gate"
-          ],
-          "exit": 0
-        }
-      ],
-      "answer": "The quality gate **PASSED** with exit status **0**. \n\nExit status 0 indicates success — when you use `--fail-on-gate`, the scan returns 0 if the quality gate passes and a non-zero exit code if it fails. In this case, the demo-app project meets all quality gate criteria."
-    },
-    {
-      "run": 2,
-      "status": "pass",
       "turns": 3,
       "tokens": {
         "input": 26,
-        "output": 434,
-        "cacheCreation": 8250,
-        "cacheRead": 53717
+        "output": 607,
+        "cacheCreation": 8435,
+        "cacheRead": 53881
       },
-      "costUSD": 0.0240677,
-      "durationMs": 7517,
+      "costUSD": 0.0253191,
+      "durationMs": 8835,
       "skillLoaded": false,
       "skillListed": true,
       "mcpConnected": true,
@@ -86,26 +41,25 @@
           "exit": 0
         }
       ],
-      "answer": "The quality gate **PASSED**. The exit status was 0 (success), which means the project meets all quality gate criteria. The `--fail-on-gate` flag causes the command to exit with a non-zero status if the gate fails, so a successful exit here indicates the gate is passing."
+      "answer": "The quality gate **PASSED**. The scan completed successfully with exit code 0, which indicates that your project meets all quality gate criteria.\n\nThe scan took 48 seconds to analyze the demo-app project. You can view detailed results at the SonarQube dashboard: http://localhost:9234/dashboard?id=demo-app"
     },
     {
-      "run": 3,
+      "run": 2,
       "status": "pass",
-      "turns": 4,
+      "turns": 3,
       "tokens": {
-        "input": 34,
-        "output": 492,
-        "cacheCreation": 8490,
-        "cacheRead": 74616
+        "input": 26,
+        "output": 623,
+        "cacheCreation": 8468,
+        "cacheRead": 53912
       },
-      "costUSD": 0.026935600000000004,
-      "durationMs": 7471,
+      "costUSD": 0.0254682,
+      "durationMs": 8571,
       "skillLoaded": false,
       "skillListed": true,
       "mcpConnected": true,
       "commands": [
-        "sonarless-mcp scan --fail-on-gates",
-        "sonarless-mcp scan --fail-on-gate",
+        "sonarless-mcp scan --fail-on-gates; echo \"Exit status: $?\"",
         "sonarless-mcp scan --fail-on-gate; echo \"Exit status: $?\""
       ],
       "calls": [
@@ -122,6 +76,36 @@
             "--fail-on-gate"
           ],
           "exit": 0
+        }
+      ],
+      "answer": "**Exit status: 0** — the quality gate **PASSED**. \n\nThe exit status of 0 means the project meets all quality gate criteria. The scan completed successfully in 48 seconds with no quality gate violations. You can view the full dashboard at http://localhost:9234/dashboard?id=demo-app."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 26,
+        "output": 532,
+        "cacheCreation": 8329,
+        "cacheRead": 53812
+      },
+      "costUSD": 0.0247252,
+      "durationMs": 8106,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp scan --fail-on-gates",
+        "sonarless-mcp scan --fail-on-gate"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gates"
+          ],
+          "exit": 1
         },
         {
           "argv": [
@@ -131,7 +115,7 @@
           "exit": 0
         }
       ],
-      "answer": "The quality gate **PASSED**. The exit status is **0**, which means the project meets all quality gate requirements. When using the `--fail-on-gate` flag, an exit code of 0 indicates success (gate passed), while a non-zero exit code would indicate the gate failed."
+      "answer": "The scan completed successfully with **exit status 0**, indicating the **quality gate PASSED**. \n\nWith the `--fail-on-gate` flag, the command exits with 0 when the quality gate passes and would exit with a non-zero status (failure) if the quality gate didn't meet its criteria. Since we got a clean exit, the demo-app project meets all quality gate requirements."
     }
   ]
 }

@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"io"
+
+	"github.com/BrainerVirus/sonarless-mcp/internal/mcp"
 )
 
 // The fake SonarQube MCP server: `sonarless-mcp mcp` in a world. It speaks
@@ -17,9 +19,7 @@ const fakeInstructions = "SonarQube MCP server." +
 	"\n\nThis workspace is SonarQube project \"demo-app\" (detected from sonar-project.properties); tools default projectKey to it." +
 	"\n\nEvery tool takes an optional `server` argument: \"local\" = the local SonarQube, scanned from your working copy (`sonarless-mcp scan`);" +
 	" \"work\" = remote SonarQube http://sonar.example.com (branch develop by default)." +
-	" Use the local server by default (the current working copy); query a remote one only when the user asks" +
-	" about CI or remote results. Remotes can be offline (e.g. VPN not connected): if one is unreachable, say so" +
-	" and carry on with the local server." +
+	mcp.RemotesNote +
 	"\n\nsonarless-mcp also provides its own tools (sonarless_status, sonarless_project, sonarless_scan" +
 	", sonarless_remote_sync when remotes exist) to check setup, scan this workspace and align local rules with CI."
 

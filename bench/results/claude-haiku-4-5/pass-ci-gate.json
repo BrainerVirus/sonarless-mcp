@@ -9,118 +9,23 @@
     {
       "run": 1,
       "status": "pass",
-      "turns": 9,
+      "turns": 3,
       "tokens": {
-        "input": 61,
-        "output": 1327,
-        "cacheCreation": 11821,
-        "cacheRead": 150319
+        "input": 26,
+        "output": 438,
+        "cacheCreation": 994,
+        "cacheRead": 73375
       },
-      "costUSD": 0.0453699,
-      "durationMs": 17482,
-      "skillLoaded": true,
-      "skillListed": true,
-      "mcpConnected": true,
-      "commands": [
-        "sonarless-mcp status",
-        "sonarless-mcp remote list"
-      ],
-      "calls": [
-        {
-          "argv": [
-            "status"
-          ],
-          "exit": 0
-        },
-        {
-          "argv": [
-            "remote",
-            "list"
-          ],
-          "exit": 0
-        },
-        {
-          "tool": "sonarless_remote_sync",
-          "args": {
-            "remote": "work"
-          },
-          "exit": 0
-        },
-        {
-          "tool": "sonarless_scan",
-          "exit": 0
-        },
-        {
-          "tool": "get_project_quality_gate_status",
-          "args": {
-            "server": "local"
-          },
-          "exit": 0
-        }
-      ],
-      "answer": "✅ **Your working copy will pass CI's quality gate.**\n\nI synced CI's rules to your local SonarQube (quality gate \"CI way\", 3 quality profiles, and new-code definition), then scanned your code. Result: **status OK** — all conditions pass. Your code is ready for CI."
-    },
-    {
-      "run": 2,
-      "status": "pass",
-      "turns": 8,
-      "tokens": {
-        "input": 54,
-        "output": 1059,
-        "cacheCreation": 11389,
-        "cacheRead": 125972
-      },
-      "costUSD": 0.0407242,
-      "durationMs": 14593,
-      "skillLoaded": true,
-      "skillListed": true,
-      "mcpConnected": true,
-      "commands": null,
-      "calls": [
-        {
-          "tool": "sonarless_status",
-          "exit": 0
-        },
-        {
-          "tool": "sonarless_remote_sync",
-          "args": {
-            "remote": "work"
-          },
-          "exit": 0
-        },
-        {
-          "tool": "sonarless_scan",
-          "exit": 0
-        },
-        {
-          "tool": "get_project_quality_gate_status",
-          "args": {
-            "server": "local"
-          },
-          "exit": 0
-        }
-      ],
-      "answer": "✅ **Yes, your working copy will pass CI's quality gate.**\n\nI synced CI's rules to your local SonarQube (`work` server: http://sonar.example.com) and scanned your code. The result:\n\n- **Quality gate: PASSED** (using CI's \"CI way\" gate)\n- **Status:** OK with no failing conditions\n\nYour code meets all of CI's quality requirements."
-    },
-    {
-      "run": 3,
-      "status": "pass",
-      "turns": 6,
-      "tokens": {
-        "input": 43,
-        "output": 1075,
-        "cacheCreation": 10578,
-        "cacheRead": 100924
-      },
-      "costUSD": 0.0366664,
-      "durationMs": 14688,
+      "costUSD": 0.0522815,
+      "durationMs": 22084,
       "skillLoaded": true,
       "skillListed": true,
       "mcpConnected": true,
       "commands": [
         "sonarless-mcp status",
         "sonarless-mcp remote sync work",
-        "sonarless-mcp scan"
+        "sonarless-mcp scan",
+        "sonarless-mcp project"
       ],
       "calls": [
         {
@@ -142,9 +47,142 @@
             "scan"
           ],
           "exit": 0
+        },
+        {
+          "argv": [
+            "project"
+          ],
+          "exit": 0
         }
       ],
-      "answer": "✅ **Your working copy will pass CI's quality gate.** \n\nThe scan completed with CI's rules applied, and the result is **PASSED**. This means your code meets all of CI's quality gate criteria."
+      "answer": "**Yes, your working copy will pass CI's quality gate.** ✅\n\nThe scan analyzed your code using the exact same quality gate and rule set that CI uses on the remote server (http://sonar.example.com), and it passed cleanly in 61 seconds.\n\nHere's what I did:\n1. Synced CI's quality gate configuration, rule sets, and new-code definition from the remote server to your local SonarQube\n2. Scanned your working copy with those CI rules\n3. Result: **PASSED**\n\nYour code meets all of CI's quality standards."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 10,
+      "tokens": {
+        "input": 77,
+        "output": 1472,
+        "cacheCreation": 11984,
+        "cacheRead": 197360
+      },
+      "costUSD": 0.051141000000000006,
+      "durationMs": 20274,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp status --json 2\u003e\u00261 | head -100",
+        "sonarless-mcp remote sync work",
+        "sonarless-mcp scan",
+        "sonarless-mcp project",
+        "sonarless-mcp status --json | jq ."
+      ],
+      "calls": [
+        {
+          "argv": [
+            "status",
+            "--json"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "sync",
+            "work"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "scan"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "project"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "status",
+            "--json"
+          ],
+          "exit": 0
+        },
+        {
+          "tool": "get_project_quality_gate_status",
+          "args": {
+            "projectKey": "demo-app",
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "✅ **Yes, your working copy passes CI's quality gate.**\n\nI synced CI's quality gate rules and configuration to the local SonarQube, then scanned your workspace with those rules. The result:\n\n- **Quality gate status**: PASSED\n- **Failing conditions**: None\n\nYour code meets all of CI's quality gate requirements."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 34,
+        "output": 514,
+        "cacheCreation": 1211,
+        "cacheRead": 100113
+      },
+      "costUSD": 0.0590276,
+      "durationMs": 26944,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp status",
+        "sonarless-mcp remote sync work",
+        "sonarless-mcp scan",
+        "sonarless-mcp project",
+        "sonarless-mcp status --json | grep -A5 -B5 \"quality\\|gate\" || echo \"No gate details in status\""
+      ],
+      "calls": [
+        {
+          "argv": [
+            "status"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "sync",
+            "work"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "scan"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "project"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "status",
+            "--json"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "✅ **Yes, your working copy will pass CI's quality gate.**\n\nI synced CI's rules to your local server and scanned your code. Result:\n- **Quality gate status**: **PASSED** (using CI's rules)\n- **Analysis time**: 61 seconds\n\nYour code meets all of CI's quality gate conditions."
     }
   ]
 }

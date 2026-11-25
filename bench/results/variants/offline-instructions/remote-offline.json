@@ -1,0 +1,112 @@
+{
+  "case": "remote-offline",
+  "model": "claude-haiku-4-5",
+  "key": "1-9d0d1bc9cd991377-08d02c6a1127a519-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 36,
+        "output": 825,
+        "cacheCreation": 8840,
+        "cacheRead": 75119
+      },
+      "costUSD": 0.029352899999999994,
+      "durationMs": 12268,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        },
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "The CI's remote SonarQube server is currently unreachable. However, the local scan shows **1 security hotspot**:\n\n| Issue | Location | Category | Risk Level |\n|-------|----------|----------|-----------|\n| H1 | `demo-app:src/payment.ts:3` | Weak Cryptography | MEDIUM |\n\nThis suggests there's a weak cryptography issue on line 3 of the payment processing code. To see the full details and recommendations, you can review that file or check the full hotspot details when the remote CI server comes back online."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 36,
+        "output": 849,
+        "cacheCreation": 8871,
+        "cacheRead": 75174
+      },
+      "costUSD": 0.0295404,
+      "durationMs": 13130,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        },
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "The CI SonarQube is unreachable right now. However, the local scan found **1 security hotspot**:\n\n| Issue | Category | Probability | Location |\n|-------|----------|-------------|----------|\n| H1 | weak-cryptography | MEDIUM | `src/payment.ts:3` |\n\nThis is a medium-probability issue related to weak cryptography in the payment module. You may want to review line 3 of `src/payment.ts` to see if it involves cryptographic practices that need hardening."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 36,
+        "output": 773,
+        "cacheCreation": 8870,
+        "cacheRead": 75179
+      },
+      "costUSD": 0.029158899999999995,
+      "durationMs": 11654,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        },
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "The CI SonarQube server is unreachable at the moment. However, the local SonarQube scan found **1 security hotspot**:\n\n- **File**: `src/payment.ts`, line 3\n- **Issue**: Weak cryptography\n- **Probability**: Medium\n- **Hotspot ID**: H1\n\nThis is a medium-probability issue related to weak cryptographic implementation. You should review line 3 of `src/payment.ts` to understand what cryptographic operation needs to be strengthened."
+    }
+  ]
+}
