@@ -104,8 +104,10 @@ checksum (below), runs the new binary's `version` as a smoke test and only then
 replaces the running binary atomically, so a failed check leaves the installed
 one untouched. It also pulls the latest SonarQube MCP image, which the shared
 container picks up the next time it starts from stopped (never mid-session),
-and refreshes the agent skill in your clients. Restart your AI clients to use
-the new binary.
+and has the new binary run `skill sync`, so the agent skill copies take its
+version at once (a release without that command updates them the next time it
+runs; a downgrade leaves them alone). Restart your AI clients to use the new
+binary.
 
 Installed binaries also keep themselves current: once a day, the gateway,
 starting the MCP bridge, `start` or `scan` check GitHub Releases in the

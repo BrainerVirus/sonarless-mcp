@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,6 +30,9 @@ type upgradeFixture struct {
 	exe                    string
 	cacheDir               string
 	skills, images, spawns int
+	syncs                  []string // binaries whose `skill sync` ran
+	syncOut                string
+	syncErr                error
 	stdout, stderr         bytes.Buffer
 }
 
@@ -45,9 +49,9 @@ func newUpgradeFixture(t *testing.T, current string, releases ...*updatetest.Rel
 		t.Fatal(err)
 	}
 
-	oldVersion, oldNew, oldSkills, oldImage, oldSpawn := version, newUpgrader, refreshSkills, refreshImage, spawnBackground
+	oldVersion, oldNew, oldSkills, oldImage, oldSpawn, oldSync := version, newUpgrader, refreshSkills, refreshImage, spawnBackground, newSkillSync
 	t.Cleanup(func() {
-		version, newUpgrader, refreshSkills, refreshImage, spawnBackground = oldVersion, oldNew, oldSkills, oldImage, oldSpawn
+		version, newUpgrader, refreshSkills, refreshImage, spawnBackground, newSkillSync = oldVersion, oldNew, oldSkills, oldImage, oldSpawn, oldSync
 	})
 	version = current
 	newUpgrader = func(cfg *config.Config, log io.Writer) *update.Upgrader {
@@ -70,6 +74,11 @@ func newUpgradeFixture(t *testing.T, current string, releases ...*updatetest.Rel
 	refreshSkills = func() int { fx.skills++; return 0 }
 	refreshImage = func(context.Context, *config.Config, io.Writer, io.Writer, string) { fx.images++ }
 	spawnBackground = func(*config.Config) error { fx.spawns++; return nil }
+	fx.syncOut = "updated\t/h/.claude/skills/sonarless-mcp\t1.1.0\nkept\t/h/.codex/skills/sonarless-mcp\t9.0.0\nupdated\t/h/.cursor/skills/sonarless-mcp\t1.1.0\n"
+	newSkillSync = func(_ context.Context, exe string) ([]byte, error) {
+		fx.syncs = append(fx.syncs, exe)
+		return []byte(fx.syncOut), fx.syncErr
+	}
 	return fx
 }
 
@@ -138,19 +147,47 @@ func TestUpgradeCheck(t *testing.T) {
 }
 
 func TestUpgradeCommand(t *testing.T) {
-	t.Run("given a newer signed release, it installs it and refreshes the skill and the image", func(t *testing.T) {
+	t.Run("given a newer signed release, it installs it and the new binary syncs the skill copies", func(t *testing.T) {
 		fx := newUpgradeFixture(t, "1.0.0", &updatetest.Release{Version: "1.1.0"})
 		if err := fx.run("upgrade"); err != nil {
 			t.Fatal(err)
 		}
-		if got := fx.stdout.String(); !strings.Contains(got, "Upgraded sonarless-mcp 1.0.0 to 1.1.0") {
+		got := fx.stdout.String()
+		if !strings.Contains(got, "Upgraded sonarless-mcp 1.0.0 to 1.1.0") || !strings.Contains(got, "refreshed the sonarless-mcp skill in 2 copies to 1.1.0") {
 			t.Errorf("stdout = %q", got)
 		}
 		if got := fx.installed(t); !strings.Contains(got, "1.1.0") {
 			t.Errorf("binary = %q", got)
 		}
-		if fx.skills != 1 || fx.images != 1 {
-			t.Errorf("skills %d, images %d", fx.skills, fx.images)
+		if len(fx.syncs) != 1 || fx.syncs[0] != fx.exe {
+			t.Errorf("skill sync ran with %v, want the installed %s", fx.syncs, fx.exe)
+		}
+		if fx.skills != 0 || fx.images != 1 {
+			t.Errorf("the old binary refreshed the skill (%d); images %d", fx.skills, fx.images)
+		}
+	})
+
+	t.Run("given a new release without the skill command, it says the copies refresh on its next run", func(t *testing.T) {
+		fx := newUpgradeFixture(t, "1.0.0", &updatetest.Release{Version: "1.1.0"})
+		fx.syncErr = errors.New("exit status 1")
+		if err := fx.run("upgrade"); err != nil {
+			t.Fatal(err)
+		}
+		if got := fx.stdout.String(); !strings.Contains(got, "the agent skill copies take sonarless-mcp 1.1.0 the next time it runs") {
+			t.Errorf("stdout = %q", got)
+		}
+		if fx.skills != 0 {
+			t.Errorf("the old binary refreshed the skill (%d)", fx.skills)
+		}
+	})
+
+	t.Run("given the latest is installed, this binary's own refresh runs", func(t *testing.T) {
+		fx := newUpgradeFixture(t, "1.1.0", &updatetest.Release{Version: "1.1.0"})
+		if err := fx.run("upgrade"); err != nil {
+			t.Fatal(err)
+		}
+		if fx.skills != 1 || len(fx.syncs) != 0 {
+			t.Errorf("skills %d, syncs %v", fx.skills, fx.syncs)
 		}
 	})
 
@@ -179,6 +216,9 @@ func TestUpgradeCommand(t *testing.T) {
 		}
 		if got := fx.stdout.String(); !strings.Contains(got, "Installed sonarless-mcp 1.0.0 to 0.8.1") {
 			t.Errorf("stdout = %q", got)
+		}
+		if len(fx.syncs) != 0 || fx.skills != 0 {
+			t.Errorf("a downgrade touched the skill copies: syncs %v, refresh %d", fx.syncs, fx.skills)
 		}
 	})
 
@@ -214,6 +254,9 @@ func TestUpgradeBackground(t *testing.T) {
 		}
 		if got := fx.installed(t); !strings.Contains(got, "1.1.0") {
 			t.Errorf("binary = %q; log %q %q", got, fx.stdout.String(), fx.stderr.String())
+		}
+		if len(fx.syncs) != 1 || !strings.Contains(fx.stdout.String(), "refreshed the sonarless-mcp skill in 2 copies to 1.1.0") {
+			t.Errorf("syncs %v; log %q", fx.syncs, fx.stdout.String())
 		}
 	})
 }
