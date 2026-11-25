@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.14.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.13.0...v0.14.0) (2026-11-25)
+
+### Features
+
+* **skill:** bench-measured skill fixes; the command tree moves to internal/cli ([#15](https://github.com/BrainerVirus/sonarless-mcp/issues/15)) ([6a759b2](https://github.com/BrainerVirus/sonarless-mcp/commit/6a759b2c5d030f81af3a3cfe16f20a74d21e0917))
+
 ## [0.13.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.12.0...v0.13.0) (2026-11-25)
 
 ### Features
