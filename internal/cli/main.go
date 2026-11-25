@@ -161,6 +161,7 @@ func newRootCommand(ctx context.Context) *cobra.Command {
 	root.AddCommand(reset)
 
 	root.AddCommand(statusCommand())
+	root.AddCommand(appcdsCommand())
 
 	root.AddCommand(scanCommand(ctx))
 

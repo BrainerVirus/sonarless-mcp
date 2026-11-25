@@ -52,6 +52,10 @@ lists the rest.
   set `SONARLESS_PROJECT_KEY` in the project's `.sonarless.env` to override it.
 - **No coverage in build-based scans.** Pass `--tests` or set
   `SONARLESS_SCAN_TESTS=true`.
+- **The MCP server starts slower than usual.** `sonarless-mcp appcds` shows its
+  class-data archive: `failed` says why (and when it is tried again),
+  `sonarless-mcp appcds rebuild` builds it again now
+  ([Configuration](configuration.md#mcp-class-data-archive-appcds)).
 - **Free the memory now.** `sonarless-mcp stop` (containers) or
   `sonarless-mcp stop --all` (the gateway too).
 - **Start over.** `sonarless-mcp reset --yes` wipes the current SonarQube

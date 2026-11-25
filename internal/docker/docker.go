@@ -43,6 +43,22 @@ func Stream(ctx context.Context, out io.Writer, args ...string) error {
 	return cmd.Run()
 }
 
+// Exec runs a command in a running container (`docker exec name args...`)
+// and returns its stdout and exit status. Docker's own failures have their
+// own statuses: 126 when the command cannot run, 127 when the image lacks
+// it. err is set only when the docker CLI itself could not run.
+func Exec(ctx context.Context, name string, args ...string) (stdout string, status int, err error) {
+	cmd := exec.CommandContext(ctx, "docker", append([]string{"exec", name}, args...)...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err = cmd.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return out.String(), exit.ExitCode(), nil
+	}
+	return out.String(), 0, err
+}
+
 // Available reports whether the docker daemon is reachable.
 func Available(ctx context.Context) error {
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -60,8 +76,13 @@ type Container struct {
 	Image   string // image reference the container was created from
 	ImageID string // image ID the container runs
 	Status  string // created, running, exited, ...
-	Labels  map[string]string
-	Mounts  []Mount
+	// ExitCode is the last run's exit status (meaningful once exited).
+	ExitCode int
+	// StartedAt is when the container last started, as the daemon prints it
+	// (RFC 3339), for `docker logs --since`.
+	StartedAt string
+	Labels    map[string]string
+	Mounts    []Mount
 }
 
 // Mount is a container mount.
@@ -87,7 +108,11 @@ func Inspect(ctx context.Context, name string) (*Container, error) {
 			Image  string
 			Labels map[string]string
 		}
-		State  struct{ Status string }
+		State struct {
+			Status    string
+			ExitCode  int
+			StartedAt string
+		}
 		Mounts []Mount
 	}
 	if err := json.Unmarshal([]byte(out), &raw); err != nil || len(raw) == 0 {
@@ -95,12 +120,14 @@ func Inspect(ctx context.Context, name string) (*Container, error) {
 	}
 	r := raw[0]
 	return &Container{
-		Name:    strings.TrimPrefix(r.Name, "/"),
-		Image:   r.Config.Image,
-		ImageID: r.Image,
-		Status:  r.State.Status,
-		Labels:  r.Config.Labels,
-		Mounts:  r.Mounts,
+		Name:      strings.TrimPrefix(r.Name, "/"),
+		Image:     r.Config.Image,
+		ImageID:   r.Image,
+		Status:    r.State.Status,
+		ExitCode:  r.State.ExitCode,
+		StartedAt: r.State.StartedAt,
+		Labels:    r.Config.Labels,
+		Mounts:    r.Mounts,
 	}, nil
 }
 

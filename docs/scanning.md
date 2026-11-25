@@ -71,8 +71,10 @@ sonarless-mcp status --json
 memory in use), the gateway (pid, port, uptime, and each workspace session with
 its last request), the stdio bridges (`sonarless-mcp mcp`) still running, the
 scans in progress, CLI or agent-started (`waiting` for the server, or
-`scanning`), and when the idle watcher stops everything. `--json` prints the
-same as JSON (`containers`, `gateway`, `shims`, `scans`, `idle`).
+`scanning`), when the idle watcher stops everything, and the state of the MCP
+server's [class-data archive](configuration.md#mcp-class-data-archive-appcds).
+`--json` prints the same as JSON (`containers`, `appcds`, `gateway`, `shims`,
+`scans`, `idle`).
 
 ## Start, stop and reset
 

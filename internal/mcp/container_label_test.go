@@ -20,7 +20,7 @@ func TestContainersCarryTheirInstance(t *testing.T) {
 	}
 	calls := fakeDocker(t, "")
 	for _, c := range []*Container{NewLocal(cfg, nil), NewRemote(cfg, nil, "work", "http://sonar.example", 19101)} {
-		if err := c.create(context.Background()); err != nil {
+		if err := c.create(context.Background(), cdsPlan{}); err != nil {
 			t.Fatal(err)
 		}
 	}

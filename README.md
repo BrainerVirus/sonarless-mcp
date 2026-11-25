@@ -130,7 +130,7 @@ signing: [docs/upgrading.md](docs/upgrading.md).
 - [Configuration](docs/configuration.md): every setting, file locations, SonarQube versions
 - [Upgrading](docs/upgrading.md): upgrade, background upgrades, release signing
 - [Troubleshooting](docs/troubleshooting.md)
-- [Performance](docs/performance.md): the memory measurements behind the heap and JVM defaults
+- [Performance](docs/performance.md): the memory and startup measurements behind the heap and JVM defaults and the MCP class-data archive
 
 `sonarless-mcp --help` lists every command and every `SONARLESS_*` variable;
 `sonarless-mcp <command> --help` describes one command.

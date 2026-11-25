@@ -42,6 +42,7 @@ const (
 	MCPToolsets      = "SONARLESS_MCP_TOOLSETS"
 	MCPReadOnly      = "SONARLESS_MCP_READ_ONLY"
 	MCPJavaOpts      = "SONARLESS_MCP_JAVA_OPTS"
+	MCPAppCDS        = "SONARLESS_MCP_APPCDS"
 	IdleTimeoutKey   = "SONARLESS_IDLE_TIMEOUT"
 	ProjectKey       = "SONARLESS_PROJECT_KEY"
 	ProjectName      = "SONARLESS_PROJECT_NAME"
@@ -79,6 +80,7 @@ var Keys = []Key{
 		Help: "comma-separated toolset names the MCP server enables; the value `default` (or empty) hands the choice to the MCP server"},
 	{Name: MCPReadOnly, Default: "false", Help: "disable MCP write tools"},
 	{Name: MCPJavaOpts, Default: "-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k", Help: "JVM options of the shared MCP server (JAVA_TOOL_OPTIONS); a small heap and C1-only JIT keep it near 200 MiB; none leaves the JVM defaults"},
+	{Name: MCPAppCDS, Default: "true", Help: "start the shared MCP server from a class-data archive (AppCDS) built in the background for its image and JVM options: ready in about half the time with ~30 MiB less memory; false neither builds nor uses one"},
 	{Name: IdleTimeoutKey, Default: "30m", Help: "stop server+MCP after this long unused; 0 disables"},
 	{Name: WebHeap, Default: "256m", Help: "max Java heap of SonarQube's web server (SonarQube's own default is 512m)"},
 	{Name: CEHeap, Default: "384m", Help: "max Java heap of SonarQube's compute engine, which processes scan reports; raise it if big projects fail with OutOfMemoryError (SonarQube's own: 512m)"},
@@ -288,6 +290,11 @@ func (c *Config) ServerContainer() string { return c.values[Instance] + "-server
 
 // MCPContainer is the shared MCP container name.
 func (c *Config) MCPContainer() string { return c.values[Instance] + "-mcp" }
+
+// CDSName names the AppCDS archive volume of the shared MCP server and the
+// one-off container that builds it. Not "<instance>-mcp-cds": that is the
+// container of a remote named "cds".
+func (c *Config) CDSName() string { return c.values[Instance] + "-cds" }
 
 // Network is the docker network shared by server, scanners and MCP.
 func (c *Config) Network() string { return c.values[Instance] }

@@ -109,6 +109,9 @@ func statusText(ctx context.Context, e *env) string {
 		}
 		fmt.Fprintf(&b, "%s: %s\n", label, state)
 	}
+	if r.AppCDS != nil {
+		fmt.Fprintf(&b, "local mcp class-data archive (AppCDS, faster start): %s\n", cdsLine(r.AppCDS))
+	}
 	if g := r.Gateway; !g.Running {
 		fmt.Fprintf(&b, "gateway: not running (port %d)\n", g.Port)
 	} else {
