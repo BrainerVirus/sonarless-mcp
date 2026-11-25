@@ -111,3 +111,13 @@ jobs:
           $env:SONARLESS_MCP_BASE_URL = "$env:SONARLESS_MCP_SCRIPTS_BASE/dist"
           Get-Content -Raw ./install | Invoke-Expression
           & "$env:SONARLESS_MCP_INSTALL_DIR\sonarless-mcp.exe" --version
+      # The installers' cosign paths (signed, unsigned, before signing, bad
+      # signature, latest resolved through the API) against a stub cosign and
+      # file:// fixtures made from the snapshot; no network.
+      - name: install.sh signature matrix
+        if: runner.os != 'Windows'
+        run: sh .github/scripts/test-install-signature.sh dist
+      - name: install.ps1 signature matrix
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./.github/scripts/test-install-signature.ps1 -Dist dist
