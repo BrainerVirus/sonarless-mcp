@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.15.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.14.0...v0.15.0) (2026-11-25)
+
+### Features
+
+* **mcp:** health-based readiness, leaner default toolsets, offline-remote fallback ([#16](https://github.com/BrainerVirus/sonarless-mcp/issues/16)) ([f8724ab](https://github.com/BrainerVirus/sonarless-mcp/commit/f8724ab3fdc3b92e484edb8b1a6ba4fa31c25167))
+
 ## [0.14.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.13.0...v0.14.0) (2026-11-25)
 
 ### Features
