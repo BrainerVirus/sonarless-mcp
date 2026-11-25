@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,6 +69,9 @@ type cdsRecord struct {
 	State  string    `json:"state"` // ready or failed
 	Detail string    `json:"detail,omitempty"`
 	At     time.Time `json:"at"`
+	// Mapped is the start (StartedAt) of the local MCP container whose JVM
+	// was seen mapping the archive: `used` is confirmed, not assumed.
+	Mapped string `json:"mapped,omitempty"`
 }
 
 func cdsFile(cfg *config.Config) string {
@@ -236,19 +240,66 @@ func cdsRejection(logs string) string {
 }
 
 // checkArchive looks at the start of a container created or started with the
-// archive key and records a rejected archive, so the next start runs plain
-// and the status says why.
+// archive key: a rejection in the JVM's log, else whether the JVM maps the
+// file. A rejected or unmapped archive is recorded as failed, so the next start
+// runs plain and the status says why; a mapped one confirms `used`.
 func (m *Container) checkArchive(ctx context.Context, key string) {
 	c, err := docker.Inspect(ctx, m.name())
 	if err != nil {
 		return
 	}
-	if why := cdsRejection(containerLogs(ctx, m.name(), c.StartedAt)); why != "" {
-		writeCDS(m.Cfg, cdsRecord{Key: key, State: CDSFailed, Detail: "the JVM did not use the archive: " + why})
-		if m.Log != nil {
-			fmt.Fprintf(m.Log, "MCP class-data archive rejected (%s); %s runs without it\n", why, m.name())
+	why := cdsRejection(containerLogs(ctx, m.name(), c.StartedAt))
+	if why != "" {
+		why = "the JVM did not use the archive: " + why
+	} else {
+		switch mapped, unknown := archiveMapped(ctx, m.name(), key); {
+		case unknown != "":
+			if m.Log != nil {
+				fmt.Fprintf(m.Log, "Could not check that %s maps the MCP class-data archive: %s\n", m.name(), unknown)
+			}
+			return
+		case mapped:
+			if rec := readCDS(m.Cfg); m.BuildCDS && rec.Key == key && rec.State == CDSReady {
+				rec.Mapped = c.StartedAt
+				writeCDS(m.Cfg, rec)
+			}
+			return
+		}
+		why = "the JVM did not map " + cdsArchive(key) + " (the file is missing or unreadable)"
+	}
+	writeCDS(m.Cfg, cdsRecord{Key: key, State: CDSFailed, Detail: why})
+	if m.Log != nil {
+		fmt.Fprintf(m.Log, "MCP class-data archive not used (%s); %s runs without it\n", why, m.name())
+	}
+}
+
+// archiveMapped reports whether a process in the running container maps the
+// archive. One busybox sh and grep over /proc/*/maps does it; an image without
+// them is read with cat alone: the JVM is the child of Docker's init (PID 1,
+// --init). unknown says why neither worked.
+func archiveMapped(ctx context.Context, name, key string) (mapped bool, unknown string) {
+	path := cdsArchive(key)
+	out, status, err := docker.Exec(ctx, name, "sh", "-c", "grep -l -F '"+path+"' /proc/[0-9]*/maps 2>/dev/null")
+	switch {
+	case err != nil:
+		return false, err.Error()
+	case strings.TrimSpace(out) != "":
+		return true, ""
+	case status == 1 || status == 2: // grep ran and found nothing
+		return false, ""
+	case status != 126 && status != 127:
+		return false, fmt.Sprintf("docker exec exited with status %d", status)
+	}
+	kids, status, err := docker.Exec(ctx, name, "cat", "/proc/1/task/1/children")
+	if err != nil || status != 0 {
+		return false, "the image has neither sh and grep nor cat to read /proc with"
+	}
+	for _, pid := range strings.Fields(kids) {
+		if maps, status, err := docker.Exec(ctx, name, "cat", "/proc/"+pid+"/maps"); err == nil && status == 0 && strings.Contains(maps, path) {
+			return true, ""
 		}
 	}
+	return false, ""
 }
 
 // startCDSBuild starts the one-off container that builds the archive for key,
@@ -372,7 +423,54 @@ func ArchiveStatus(ctx context.Context, cfg *config.Config) CDSStatus {
 		return CDSStatus{State: CDSFailed, Key: key, Detail: rec.Detail + "; tried again after " + rec.At.Add(cdsRetry).Format(time.DateTime) + " or with a new image"}
 	}
 	if mc, err := docker.Inspect(ctx, cfg.MCPContainer()); err == nil && mc.Running() && mc.Labels[LabelCDS] == key {
-		return CDSStatus{State: CDSUsed, Key: key}
+		if rec.Mapped != "" && rec.Mapped == mc.StartedAt {
+			return CDSStatus{State: CDSUsed, Key: key}
+		}
+		return CDSStatus{State: CDSReady, Key: key, Detail: "the running MCP server was started with it, but its JVM was not seen mapping it; checked again at its next start"}
 	}
 	return CDSStatus{State: CDSReady, Key: key, Detail: "the MCP server uses it from its next start"}
 }
+
+// RebuildArchive drops the archive record and builds the archive for the
+// current MCP image and JVM options now, in the background build container;
+// with wait it returns once the build ended. The SonarQube server must be up
+// (the training start needs it). The MCP container m maps the new archive
+// from its next start.
+func RebuildArchive(ctx context.Context, m *Container, wait bool) (CDSStatus, error) {
+	cfg := m.Cfg
+	if !cfg.Bool(config.MCPAppCDS) {
+		return CDSStatus{}, fmt.Errorf("the MCP class-data archive is off (%s=false)", config.MCPAppCDS)
+	}
+	imageID := docker.ImageID(ctx, m.Image)
+	if imageID == "" {
+		return CDSStatus{}, fmt.Errorf("MCP image %s is not pulled yet; use the MCP server once first", m.Image)
+	}
+	unlock, err := sonar.LockFile(cfg.CacheDir, m.name()+".lock")
+	if err != nil {
+		return CDSStatus{}, err
+	}
+	if _, running, _ := buildState(ctx, cfg); !running {
+		_ = docker.Remove(ctx, cfg.CDSName()) // a finished build's container
+		if err := os.Remove(cdsFile(cfg)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			unlock()
+			return CDSStatus{}, err
+		}
+		m.startCDSBuild(ctx, cdsKey(imageID, jvmOpts(cfg)))
+	}
+	unlock()
+	for deadline := time.Now().Add(cdsBuildTimeout); wait && time.Now().Before(deadline); {
+		if _, running, _ := buildState(ctx, cfg); !running {
+			reapCDS(ctx, cfg)
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return CDSStatus{}, ctx.Err()
+		case <-time.After(cdsPoll):
+		}
+	}
+	return ArchiveStatus(ctx, cfg), nil
+}
+
+// cdsPoll is how often RebuildArchive looks at the build container.
+var cdsPoll = time.Second

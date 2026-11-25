@@ -43,6 +43,22 @@ func Stream(ctx context.Context, out io.Writer, args ...string) error {
 	return cmd.Run()
 }
 
+// Exec runs a command in a running container (`docker exec name args...`)
+// and returns its stdout and exit status. Docker's own failures have their
+// own statuses: 126 when the command cannot run, 127 when the image lacks
+// it. err is set only when the docker CLI itself could not run.
+func Exec(ctx context.Context, name string, args ...string) (stdout string, status int, err error) {
+	cmd := exec.CommandContext(ctx, "docker", append([]string{"exec", name}, args...)...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err = cmd.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return out.String(), exit.ExitCode(), nil
+	}
+	return out.String(), 0, err
+}
+
 // Available reports whether the docker daemon is reachable.
 func Available(ctx context.Context) error {
 	if _, err := exec.LookPath("docker"); err != nil {

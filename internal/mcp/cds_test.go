@@ -20,9 +20,13 @@ const testImageID = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123
 
 // cdsDocker is a fake `docker` on PATH backed by a directory: c/<name>.json
 // is a container's inspect output (absent: no such container), v/<name> a
-// volume, logs/<name> a container's output, image the image ID. `run`
-// creates a running container with the labels it was given and fails with
-// a name conflict like the real CLI; `rm` removes one. Every call is logged.
+// volume, logs/<name> a container's output, maps/<name> what its JVM maps,
+// image the image ID. `run` creates a running container with the labels it
+// was given (the build container exits with the status in buildexit, if
+// set) and fails with a name conflict like the real CLI; its JVM maps the
+// archive it is given unless nomap exists. `exec` answers the mapping probe
+// (nosh, nocat: the image lacks them); `rm` removes a container. Every call
+// is logged.
 type cdsDocker struct {
 	t   *testing.T
 	dir string
@@ -34,7 +38,7 @@ func newCDSDocker(t *testing.T) *cdsDocker {
 		t.Skip("shell-script fake docker")
 	}
 	d := &cdsDocker{t: t, dir: t.TempDir()}
-	for _, sub := range []string{"c", "v", "logs"} {
+	for _, sub := range []string{"c", "v", "logs", "maps"} {
 		if err := os.MkdirAll(filepath.Join(d.dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -55,6 +59,22 @@ case "$1 $2" in
 "volume create") touch "$D/v/$last" ;;
 logs*) cat "$D/logs/$last" 2>/dev/null ;;
 rm*) rm -f "$D/c/$last.json" ;;
+"exec "*)
+  name=$2
+  case "$3" in
+  sh)
+    [ -f "$D/nosh" ] && { echo 'OCI runtime exec failed: exec: "sh": executable file not found in $PATH' >&2; exit 127; }
+    m=$(cat "$D/maps/$name" 2>/dev/null)
+    m=${m##* } # the mapped file
+    [ -n "$m" ] && case "$5" in *"'$m'"*) echo /proc/7/maps; exit 0 ;; esac
+    exit 1 ;;
+  cat)
+    [ -f "$D/nocat" ] && { echo 'OCI runtime exec failed: exec: "cat": executable file not found in $PATH' >&2; exit 127; }
+    case "$4" in
+    /proc/1/task/1/children) echo 7 ;;
+    /proc/7/maps) cat "$D/maps/$name" 2>/dev/null; echo "7f00 r-xp /opt/jdk/lib/server/libjvm.so" ;;
+    esac ;;
+  esac ;;
 run*)
   name="" labels="" prev=""
   for a in "$@"; do
@@ -68,8 +88,17 @@ run*)
     echo "docker: Error response from daemon: Conflict. The container name \"/$name\" is already in use by container \"abc\"." >&2
     exit 125
   fi
-  printf '[{"Name":"/%s","Image":"%s","Config":{"Image":"img","Labels":{%s}},"State":{"Status":"running","StartedAt":"%s"}}]' \
-    "$name" "$(cat "$D/image")" "$labels" "2026-11-25T10:00:00.123456789Z" > "$D/c/$name.json"
+  status=running code=0
+  case "$name" in *-cds) [ -f "$D/buildexit" ] && status=exited code=$(cat "$D/buildexit") ;; esac
+  printf '[{"Name":"/%s","Image":"%s","Config":{"Image":"img","Labels":{%s}},"State":{"Status":"%s","ExitCode":%s,"StartedAt":"%s"}}]' \
+    "$name" "$(cat "$D/image")" "$labels" "$status" "$code" "2026-11-25T10:00:00.123456789Z" > "$D/c/$name.json"
+  # The JVM maps the archive it is given, unless the test says otherwise.
+  for a in "$@"; do
+    case "$a" in *-XX:SharedArchiveFile=*)
+      f=${a#*-XX:SharedArchiveFile=}; f=${f%% *}
+      [ -f "$D/nomap" ] || echo "7f00-7f01 rw-p 00001000 fc:00 1 $f" > "$D/maps/$name" ;;
+    esac
+  done
   echo cid ;;
 esac
 exit 0
@@ -542,4 +571,91 @@ exit 0
 			t.Errorf("files after a failed training: %q", got)
 		}
 	})
+}
+
+func TestUsedIsConfirmedByTheMapping(t *testing.T) {
+	for name, tc := range map[string]struct {
+		files []string // nomap, nosh, nocat
+		state string
+		want  string // in the detail
+	}{
+		"mapped, sh and grep":      {nil, CDSUsed, ""},
+		"mapped, cat only":         {[]string{"nosh"}, CDSUsed, ""},
+		"not mapped":               {[]string{"nomap"}, CDSFailed, "did not map /cds/"},
+		"not mapped, cat only":     {[]string{"nomap", "nosh"}, CDSFailed, "did not map /cds/"},
+		"no way to look, unproven": {[]string{"nosh", "nocat"}, CDSReady, "not seen mapping it"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := newCDSDocker(t)
+			c := cdsContainer(t)
+			d.write("v/sltest-cds", "")
+			writeCDS(c.Cfg, cdsRecord{Key: testKey(c), State: CDSReady})
+			for _, f := range tc.files {
+				d.write(f, "")
+			}
+			if err := c.Ensure(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			got := ArchiveStatus(context.Background(), c.Cfg)
+			if got.State != tc.state || !strings.Contains(got.Detail, tc.want) {
+				t.Errorf("status = %+v, want %s with %q", got, tc.state, tc.want)
+			}
+		})
+	}
+}
+
+func TestUsedOnlyForTheStartThatWasChecked(t *testing.T) {
+	d := newCDSDocker(t)
+	c := cdsContainer(t)
+	key := testKey(c)
+	// Mapped by an earlier start; the running container started since.
+	writeCDS(c.Cfg, cdsRecord{Key: key, State: CDSReady, Mapped: "2026-11-24T08:00:00Z"})
+	d.container("sltest-mcp", "running", 0, map[string]string{"sonarless-mcp.spec": c.spec(), LabelCDS: key})
+	if got := ArchiveStatus(context.Background(), c.Cfg); got.State != CDSReady || !strings.Contains(got.Detail, "not seen mapping") {
+		t.Errorf("status = %+v, want ready, unconfirmed", got)
+	}
+}
+
+func TestRebuildArchive(t *testing.T) {
+	old := cdsPoll
+	cdsPoll = 10 * time.Millisecond
+	t.Cleanup(func() { cdsPoll = old })
+	d := newCDSDocker(t)
+	c := cdsContainer(t)
+	key := testKey(c)
+	// A failed build an hour ago: a start would leave it alone for a day.
+	writeCDS(c.Cfg, cdsRecord{Key: key, State: CDSFailed, Detail: "the dump failed", At: time.Now().Add(-time.Hour)})
+	d.write("buildexit", "0")
+	got, err := RebuildArchive(context.Background(), c, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(d.runOf("sltest-cds"), "cds-build="+key) {
+		t.Fatalf("no build started; calls:\n%s", strings.Join(d.calls(), "\n"))
+	}
+	if got.State != CDSReady {
+		t.Errorf("status after the rebuild = %+v, want ready", got)
+	}
+	if !strings.Contains(strings.Join(d.calls(), "\n"), "rm -fv sltest-cds") {
+		t.Error("finished build container not cleaned up")
+	}
+
+	// A build that is already running is waited for, not started twice.
+	d2 := newCDSDocker(t)
+	c2 := cdsContainer(t)
+	d2.container("sltest-cds", "running", 0, map[string]string{LabelCDSBuild: testKey(c2)})
+	if got, err := RebuildArchive(context.Background(), c2, false); err != nil || got.State != CDSBuilding {
+		t.Errorf("rebuild during a build = %+v, %v", got, err)
+	}
+	if d2.runOf("sltest-cds") != "" {
+		t.Error("second build started")
+	}
+}
+
+func TestRebuildArchiveOff(t *testing.T) {
+	newCDSDocker(t)
+	c := cdsContainer(t, config.MCPAppCDS, "false")
+	if _, err := RebuildArchive(context.Background(), c, false); err == nil {
+		t.Error("rebuild with AppCDS off did not fail")
+	}
 }
