@@ -16,7 +16,7 @@ in the README and LICENSE.
 
 | Path | Owns |
 |---|---|
-| `cmd/sonarless-mcp/` | CLI commands (cobra); `setup.go` wizard, `gateway.go` `serve`/`ensure`, `update.go` self-update, `agenttools.go` the `sonarless_*` MCP tools |
+| `cmd/sonarless-mcp/` | CLI commands (cobra); `setup.go` wizard, `gateway.go` `serve`/`ensure`, `upgrade.go` self-upgrade (`update` is an alias), `version.go`, `notice.go` the terminal update notice, `agenttools.go` the `sonarless_*` MCP tools |
 | `internal/config/` | layered settings: defaults < user `config.env` < project `.sonarless.env` < env |
 | `internal/docker/` | thin `docker` CLI wrapper (no SDK) |
 | `internal/sonar/` | SonarQube API client, server container lifecycle, shared token, file locks |
@@ -24,7 +24,7 @@ in the README and LICENSE.
 | `internal/project/` | project root + key detection from every config source |
 | `internal/scan/` | cli / maven / gradle / dotnet scanners |
 | `internal/idle/` | activity stamp, idle watcher, detached process spawning |
-| `internal/update/` | release check, checksum-verified self-replace |
+| `internal/update/` | release check, Sigstore- and checksum-verified, smoke-tested atomic self-replace, the one-day soak of background upgrades, the upgrade state file; `updatetest/` a fake release server for tests |
 | `internal/remote/` | remote SonarQube servers (remotes.json + private token files) |
 | `internal/clients/` | AI client detection, config editing (direct HTTP entry or stdio shim per client), gateway login autostart (systemd, launchd, Windows Run key), the embedded agent skill (`skill/SKILL.md`) |
 | `internal/tui/` | the setup picker (bubbletea) |
@@ -68,9 +68,20 @@ git config core.hooksPath .githooks   # once per clone: local commit-msg check
   (`feat` → minor, `fix`/`perf` → patch, `!` or `BREAKING CHANGE:` → major),
   updates `CHANGELOG.md`, tags `vX.Y.Z`, publishes the GitHub Release with
   generated notes, and GoReleaser attaches binaries for linux/darwin/windows ×
-  amd64/arm64 plus `checksums.txt`.
+  amd64/arm64 plus `checksums.txt` and its cosign keyless signature
+  `checksums.txt.sigstore.json`.
+- The signature's identity is `release.yml` on `refs/heads/main` (semantic-release
+  runs on the push to main). `internal/update.ReleaseIdentity` and the install
+  scripts pin it: renaming the workflow, moving releases to a tag-triggered
+  workflow or signing anything else changes it, and then every installed binary
+  refuses the new release. Change all three together, and only with a release
+  path for binaries already out there.
 - Never edit `CHANGELOG.md` by hand, create tags, or publish releases manually.
-- Installed binaries update themselves from those releases once a day
-  (`internal/update`); the archive names in `.goreleaser.yaml`
-  (`sonarless-mcp_<os>_<arch>`) are a contract with the installers and the
-  updater, so don't change them.
+- Installed binaries upgrade themselves from those releases (`internal/update`):
+  checked daily, installed once a release is a day old. The archive names in
+  `.goreleaser.yaml` (`sonarless-mcp_<os>_<arch>`), `checksums.txt` and the
+  `version` subcommand (the upgrade smoke test, with `--version` as fallback)
+  are a contract with the installers and the upgrader, so don't change them.
+- Upgrade tests run against `internal/update/updatetest`'s fake release server
+  and a test Sigstore root; never let a test replace a real binary or reach
+  GitHub.
