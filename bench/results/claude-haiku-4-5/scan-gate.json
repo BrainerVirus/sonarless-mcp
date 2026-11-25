@@ -1,0 +1,41 @@
+{
+  "case": "scan-gate",
+  "model": "claude-haiku-4-5",
+  "key": "1-720448cfef2d07b9-9c8663e977ed8242-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 6,
+      "tokens": {
+        "input": 46,
+        "output": 884,
+        "cacheCreation": 10715,
+        "cacheRead": 101476
+      },
+      "costUSD": 0.0360436,
+      "durationMs": 13602,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "sonarless_scan",
+          "exit": 0
+        },
+        {
+          "tool": "get_project_quality_gate_status",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "**The quality gate FAILED.** \n\nThe scan found two failing conditions:\n1. **New coverage: 41.2% \u003c 80%** — The new code doesn't meet the coverage requirement\n2. **New violations: 3 \u003e 0** — There are 3 new code violations\n\nYou'll need to either add test coverage or fix the new violations to pass the gate."
+    }
+  ]
+}

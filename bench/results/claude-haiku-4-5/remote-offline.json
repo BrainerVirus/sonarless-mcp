@@ -1,0 +1,74 @@
+{
+  "case": "remote-offline",
+  "model": "claude-haiku-4-5",
+  "key": "1-9d0d1bc9cd991377-9c8663e977ed8242-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 1,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local",
+        "answer",
+        "max turns"
+      ],
+      "turns": 9,
+      "tokens": {
+        "input": 70,
+        "output": 1489,
+        "cacheCreation": 12118,
+        "cacheRead": 166560
+      },
+      "costUSD": 0.048407,
+      "durationMs": 21329,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp search-security-hotspots --server work",
+        "sonarless-mcp --help",
+        "sonarless-mcp results --server work",
+        "python3 -c \"\nimport subprocess\nimport json\n\n# Use sonarless-mcp remote to check the work server\nresult = subprocess.run(['sonarless-mcp', 'remote'], capture_output=True, text=True)\nprint(result.stdout)\nprint(result.stderr)\n\"",
+        "sonarless-mcp mcp --version",
+        "sonarless-mcp status"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "search-security-hotspots",
+            "--server",
+            "work"
+          ],
+          "exit": 1
+        },
+        {
+          "argv": [
+            "--help"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "results",
+            "--server",
+            "work"
+          ],
+          "exit": 1
+        },
+        {
+          "argv": [
+            "status"
+          ],
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "python3 -c \"\nimport subprocess\nimport json\n\n# Use sonarless-mcp remote to check the work server\nresult = subprocess.run(['sonarless-mcp', 'remote'], capture_output=True, text=True)\nprint(result.stdout)\nprint(result.stderr)\n\""
+      ],
+      "answer": ""
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "case": "pass-ci-gate",
+  "model": "claude-haiku-4-5",
+  "key": "1-5a4563f2192fbbb9-9c8663e977ed8242-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 11,
+      "tokens": {
+        "input": 85,
+        "output": 1748,
+        "cacheCreation": 12444,
+        "cacheRead": 221437
+      },
+      "costUSD": 0.0558567,
+      "durationMs": 25896,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp status --json 2\u003e\u00261",
+        "sonarless-mcp remote sync work",
+        "sonarless-mcp scan 2\u003e\u00261",
+        "sonarless-mcp-mcp_client -c 'mcp_sonarqube_get_project_quality_gate_status' --server local 2\u003e\u00261 | head -50",
+        "sonarless-mcp project",
+        "mcp_client -c mcp__sonarqube__get_project_quality_gate_status --server local 2\u003e\u00261 | head -100"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "status",
+            "--json"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "sync",
+            "work"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "scan"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "project"
+          ],
+          "exit": 0
+        },
+        {
+          "tool": "get_project_quality_gate_status",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "sonarless-mcp-mcp_client -c 'mcp_sonarqube_get_project_quality_gate_status' --server local 2\u003e\u00261 | head -50",
+        "mcp_client -c mcp__sonarqube__get_project_quality_gate_status --server local 2\u003e\u00261 | head -100"
+      ],
+      "answer": "✅ **Yes, your current working copy will pass CI's quality gate.**\n\nAfter syncing CI's rules and quality gate definition locally, I scanned your code and confirmed:\n\n- **Quality gate status**: PASSED (CI way)\n- **Conditions**: All passed (no failing conditions)\n\nYour code is ready from a quality gate perspective."
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "case": "add-remote",
+  "model": "claude-haiku-4-5",
+  "key": "1-f190b737eb464324-9c8663e977ed8242-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 20,
+        "output": 1064,
+        "cacheCreation": 10085,
+        "cacheRead": 33062
+      },
+      "costUSD": 0.0288162,
+      "durationMs": 13730,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": null,
+      "answer": "I see from the sonarless-mcp documentation that tokens should never be passed through chat or commands. Instead, please run this command in your terminal — it will prompt you for the token interactively:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nWhen prompted, enter your token: `\u003ctoken\u003e`\n\nThis keeps the token out of command history and chat logs. Once added, you can verify it with:\n\n```bash\nsonarless-mcp remote list\n```"
+    }
+  ]
+}

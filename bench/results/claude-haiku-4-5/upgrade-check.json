@@ -1,0 +1,39 @@
+{
+  "case": "upgrade-check",
+  "model": "claude-haiku-4-5",
+  "key": "1-bd05bb69d40ee6b4-9c8663e977ed8242-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 28,
+        "output": 475,
+        "cacheCreation": 9808,
+        "cacheRead": 55225
+      },
+      "costUSD": 0.0275415,
+      "durationMs": 8401,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp upgrade --check"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "upgrade",
+            "--check"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "Yes, there's a newer release available. You have **v0.14.2** installed and **v0.15.0** is available. You can run `sonarless-mcp upgrade` to install it whenever you're ready."
+    }
+  ]
+}

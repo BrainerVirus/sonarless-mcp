@@ -1,0 +1,39 @@
+{
+  "case": "skill-list",
+  "model": "claude-haiku-4-5",
+  "key": "1-d4e41a66fb330b55-9c8663e977ed8242-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 28,
+        "output": 666,
+        "cacheCreation": 9882,
+        "cacheRead": 55252
+      },
+      "costUSD": 0.028647200000000005,
+      "durationMs": 9233,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp skill list"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "skill",
+            "list"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "You have **one outdated copy** of the sonarless-mcp skill:\n\n| Path | Version | State |\n|------|---------|-------|\n| `~/.claude/skills/sonarless-mcp` | v0.14.2 | current ✓ |\n| `~/.config/opencode/skills/sonarless-mcp` | v0.12.0 | outdated |\n\nThe copy in `~/.config/opencode/skills/` is two minor versions behind. To update it, run:\n```bash\nsonarless-mcp skill sync\n```"
+    }
+  ]
+}

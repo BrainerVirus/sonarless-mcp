@@ -1,0 +1,72 @@
+{
+  "case": "compare-ci",
+  "model": "claude-haiku-4-5",
+  "key": "1-a5585e58582603c7-9c8663e977ed8242-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 10,
+      "tokens": {
+        "input": 77,
+        "output": 2222,
+        "cacheCreation": 13062,
+        "cacheRead": 200959
+      },
+      "costUSD": 0.05740690000000001,
+      "durationMs": 28384,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp status",
+        "sonarless-mcp scan",
+        "cat \u003e /tmp/compare_sonar.py \u003c\u003c 'EOF'\nimport json\nimport subprocess\n\ndef get_issues(server):\n    cmd = [\"sonarless-mcp\", \"search-sonar-issues-in-projects\", f\"--server={server}\"]\n    result = subprocess.run(cmd, capture_output=True, text=True, cwd=\"\u003cworld\u003e/project\")\n    if result.returncode != 0:\n        print(f\"Error querying {server}: {result.stderr}\")\n        return []\n    try:\n        data = json.loads(result.stdout)\n        return data.get(\"issues\", [])\n    except json.JSONDecodeError:\n        return []\n\nlocal_issues = get_issues(\"local\")\nremote_issues = get_issues(\"work\")\n\nprint(f\"LOCAL ({len(local_issues)} issues):\")\nfor issue in sorted(local_issues, key=lambda x: (x.get(\"file\", \"\"), x.get(\"line\", 0))):\n    print(f\"  {issue.get('file', 'unknown')}:{issue.get('line', '?')} [{issue.get('severity', '?')}] {issue.get('type', '')} - {issue.get('message', '')[:60]}\")\n\nprint(f\"\\nREMOTE CI ({len(remote_issues)} issues):\")\nfor issue in sorted(remote_issues, key=lambda x: (x.get(\"file\", \"\"), x.get(\"line\", 0))):\n    print(f\"  {issue.get('file', 'unknown')}:{issue.get('line', '?')} [{issue.get('severity', '?')}] {issue.get('type', '')} - {issue.get('message', '')[:60]}\")\n\n# Simple comparison\nlocal_set = {(i.get('file'), i.get('line'), i.get('ruleId')) for i in local_issues}\nremote_set = {(i.get('file'), i.get('line'), i.get('ruleId')) for i in remote_issues}\n\nonly_local = local_set - remote_set\nonly_remote = remote_set - local_set\nboth = local_set \u0026 remote_set\n\nprint(f\"\\nCOMPARISON:\")\nprint(f\"  Only in LOCAL: {len(only_local)}\")\nprint(f\"  Only in CI: {len(only_remote)}\")\nprint(f\"  In both: {len(both)}\")\nEOF\npython3 -I /tmp/compare_sonar.py\n",
+        "sonarless-mcp search-sonar-issues-in-projects --server=local --json 2\u003e/dev/null | head -200"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "status"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "scan"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "search-sonar-issues-in-projects",
+            "--server=local",
+            "--json"
+          ],
+          "exit": 1
+        },
+        {
+          "tool": "search_sonar_issues_in_projects",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        },
+        {
+          "tool": "search_sonar_issues_in_projects",
+          "args": {
+            "server": "work"
+          },
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "cat \u003e /tmp/compare_sonar.py \u003c\u003c 'EOF'\nimport json\nimport subprocess\n\ndef get_issues(server):\n    cmd = [\"sonarless-mcp\", \"search-sonar-issues-in-projects\", f\"--server={server}\"]\n    result = subprocess.run(cmd, capture_output=True, text=True, cwd=\"\u003cworld\u003e/project\")\n    if result.returncode != 0:\n        print(f\"Error querying {server}: {result.stderr}\")\n        return []\n    try:\n        data = json.loads(result.stdout)\n        return data.get(\"issues\", [])\n    except json.JSONDecodeError:\n        return []\n\nlocal_issues = get_issues(\"local\")\nremote_issues = get_issues(\"work\")\n\nprint(f\"LOCAL ({len(local_issues)} issues):\")\nfor issue in sorted(local_issues, key=lambda x: (x.get(\"file\", \"\"), x.get(\"line\", 0))):\n    print(f\"  {issue.get('file', 'unknown')}:{issue.get('line', '?')} [{issue.get('severity', '?')}] {issue.get('type', '')} - {issue.get('message', '')[:60]}\")\n\nprint(f\"\\nREMOTE CI ({len(remote_issues)} issues):\")\nfor issue in sorted(remote_issues, key=lambda x: (x.get(\"file\", \"\"), x.get(\"line\", 0))):\n    print(f\"  {issue.get('file', 'unknown')}:{issue.get('line', '?')} [{issue.get('severity', '?')}] {issue.get('type', '')} - {issue.get('message', '')[:60]}\")\n\n# Simple comparison\nlocal_set = {(i.get('file'), i.get('line'), i.get('ruleId')) for i in local_issues}\nremote_set = {(i.get('file'), i.get('line'), i.get('ruleId')) for i in remote_issues}\n\nonly_local = local_set - remote_set\nonly_remote = remote_set - local_set\nboth = local_set \u0026 remote_set\n\nprint(f\"\\nCOMPARISON:\")\nprint(f\"  Only in LOCAL: {len(only_local)}\")\nprint(f\"  Only in CI: {len(only_remote)}\")\nprint(f\"  In both: {len(both)}\")\nEOF\npython3 -I /tmp/compare_sonar.py\n"
+      ],
+      "answer": "## Comparison Summary\n\n**Local:** 2 issues | **CI:** 1 issue\n\n| Issue | Local | CI | Status |\n|-------|-------|----|----|\n| `typescript:S1854` (MAJOR) at `src/payment.ts:2` | ✓ | ✓ | **Same** |\n| `typescript:S1481` (MINOR) at `src/payment.ts:4` | ✓ | ✗ | **Only Local** |\n\n**Findings:**\n- **1 issue in both:** The `S1854` useless assignment to `fee` appears on both servers\n- **1 issue only locally:** The `S1481` unused variable `'unused'` is detected locally but not in CI\n\nThis difference could mean:\n- **Different code states:** CI analyzed a different commit (older or newer code without the unused variable)\n- **Different rules/quality gates:** The local and remote rulesets differ — run `sonarless-mcp remote sync work` to align local rules with CI's configuration\n\nWould you like me to check if the code is out of sync, or align your local rules with CI before scanning again?"
+    }
+  ]
+}
