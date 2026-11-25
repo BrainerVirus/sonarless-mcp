@@ -147,9 +147,10 @@ type Shim struct {
 	// notify receives server-initiated messages (tools/list_changed) when there
 	// is no stdout: the gateway forwards them on its GET event streams.
 	notify func(message)
-	// Reload rebuilds the backends ([0] local) after remotes.json changed, so
-	// a remote added, updated or removed reaches this session on its next
-	// request. nil keeps the backends the shim started with.
+	// Reload rebuilds the backends ([0] local) after remotes.json or a remote's
+	// token file changed, so a remote added, updated or removed (or a new
+	// token) reaches this session on its next request. nil keeps the backends
+	// the shim started with.
 	Reload func() ([]*Backend, error)
 
 	backendsMu sync.RWMutex // guards Backends once the shim runs
@@ -600,23 +601,28 @@ func (s *Shim) send(m message) {
 	_, _ = s.out.Write(append(b, '\n'))
 }
 
-// remotesStamp identifies the remotes file's current version ("" when
-// absent): a stat per request is cheap next to the HTTP call it precedes.
+// remotesStamp identifies the current version of remotes.json and of the
+// remotes' token files (remotes/<name>.token), so a token written on its own
+// reloads too. A few stats per request are cheap next to the HTTP call.
 func (s *Shim) remotesStamp() string {
 	if s.Cfg == nil {
 		return ""
 	}
-	fi, err := os.Stat(filepath.Join(s.Cfg.ConfigDir, "remotes.json"))
-	if err != nil {
-		return ""
+	files, _ := filepath.Glob(filepath.Join(s.Cfg.ConfigDir, "remotes", "*.token"))
+	files = append(files, filepath.Join(s.Cfg.ConfigDir, "remotes.json"))
+	var b strings.Builder
+	for _, f := range files {
+		if fi, err := os.Stat(f); err == nil {
+			fmt.Fprintf(&b, "%s:%d/%d;", filepath.Base(f), fi.Size(), fi.ModTime().UnixNano())
+		}
 	}
-	return fmt.Sprintf("%d/%d", fi.Size(), fi.ModTime().UnixNano())
+	return b.String()
 }
 
-// reloadRemotes picks up remotes.json changes (remote add/update/remove)
-// without a client restart: the remote backends are rebuilt, the booted
-// local one is kept, and clients are told the tool list (its `server`
-// choices) changed. Requests already routed finish on the old backends.
+// reloadRemotes picks up remotes.json and token changes (remote add,
+// update, remove) without a client restart: the remote backends are rebuilt,
+// the booted local one is kept, and clients are told the tool list (its
+// `server` choices) changed. Requests already routed finish on the old backends.
 func (s *Shim) reloadRemotes() {
 	if s.Reload == nil {
 		return

@@ -155,3 +155,67 @@ func TestGatewaySessionSeesRemoteAddedWhileRunning(t *testing.T) {
 		t.Errorf("after remote remove: %s", body)
 	}
 }
+
+func TestGatewaySessionUsesTokenChangedOnItsOwn(t *testing.T) {
+	srv, g, _ := newTestGateway(t, fakeSonar(t), func(context.Context) error { return nil })
+	inner := fakeSonar(t)
+	var seen atomic.Value // last bearer token the remote's MCP endpoint got
+	ci := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/mcp" {
+			seen.Store(r.Header.Get("Authorization"))
+		}
+		req, _ := http.NewRequestWithContext(r.Context(), r.Method, inner.URL+r.URL.Path, r.Body)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+		_, _ = io.Copy(w, resp.Body)
+	}))
+	t.Cleanup(ci.Close)
+
+	// Remote backends read their token file, as shimBackends does.
+	base := g.NewSession
+	g.NewSession = func(ws string) (*Shim, error) {
+		s, err := base(ws)
+		if err != nil {
+			return nil, err
+		}
+		rs, _ := remote.Load(g.Cfg)
+		for _, r := range rs {
+			s.Backends = append(s.Backends, &Backend{Name: r.Name, APIURL: r.URL, MCPURL: r.URL + "/mcp", Remote: true,
+				Ensure: func(context.Context) error { return nil },
+				Token:  func(context.Context, bool) (string, error) { return remote.Token(g.Cfg, r.Name) }})
+		}
+		return s, nil
+	}
+	writeToken := func(tok string, at time.Time) {
+		t.Helper()
+		f := remote.TokenFile(g.Cfg, "work")
+		if err := os.MkdirAll(filepath.Dir(f), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, []byte(tok), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(f, at, at); err != nil { // coarse-mtime filesystems
+			t.Fatal(err)
+		}
+	}
+	writeToken("token-aaaa", time.Now().Add(-time.Minute))
+	writeRemotes(t, g.Cfg.ConfigDir, []remote.Remote{{Name: "work", URL: ci.URL, Port: 1}})
+	call := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"show_rule","arguments":{"server":"work"}}}`
+
+	post(t, srv, call, nil)
+	if got, _ := seen.Load().(string); got != "Bearer token-aaaa" {
+		t.Fatalf("first call sent %q", got)
+	}
+	// Only the token file changes (same size, remotes.json untouched).
+	writeToken("token-bbbb", time.Now())
+	post(t, srv, call, nil)
+	if got, _ := seen.Load().(string); got != "Bearer token-bbbb" {
+		t.Errorf("call after a token-only change sent %q, want the new token", got)
+	}
+}
