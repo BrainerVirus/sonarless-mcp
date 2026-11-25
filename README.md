@@ -96,8 +96,8 @@ sonarless-mcp status     # what is running and how much memory it takes
 
 The first run pulls the SonarQube images (a few GB). The server stops itself
 after 30 minutes unused and resumes on the next request, history intact.
-Scanners, project key detection, `stop` and `reset`:
-[docs/scanning.md](docs/scanning.md).
+Scanners, project key detection, exit status (`scan --fail-on-gate` for CI),
+`stop` and `reset`: [docs/scanning.md](docs/scanning.md).
 
 To compare with your CI's SonarQube and make local scans judge like it:
 
@@ -139,6 +139,11 @@ signing: [docs/upgrading.md](docs/upgrading.md).
 Conventional Commits drive fully automated releases (semantic-release +
 GoReleaser); see [AGENTS.md](AGENTS.md) for layout, testing rules and the
 release flow.
+
+## Security
+
+Report vulnerabilities privately, never in a public issue: see
+[SECURITY.md](SECURITY.md) for supported versions and how to report.
 
 ## Credits
 

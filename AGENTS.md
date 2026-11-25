@@ -96,3 +96,13 @@ git config core.hooksPath .githooks   # once per clone: local commit-msg check
 - Upgrade tests run against `internal/update/updatetest`'s fake release server
   and a test Sigstore root; never let a test replace a real binary or reach
   GitHub.
+- Exit statuses are a contract with CI and scripts: 0 success, 1 any error, 2
+  a failing quality gate under `sonarless-mcp scan --fail-on-gate`
+  (`cmd/sonarless-mcp/scan.go`, listed in the root `--help` and
+  `docs/scanning.md`). Add a new one there, never reuse a number.
+
+## Security
+
+Vulnerabilities are reported privately through GitHub security advisories, as
+[SECURITY.md](SECURITY.md) describes; never discuss one in a public issue or
+PR before its fix is released.

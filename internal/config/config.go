@@ -47,6 +47,7 @@ const (
 	Scanner          = "SONARLESS_SCANNER"
 	ScannerImage     = "SONARLESS_SCANNER_IMAGE"
 	ScanTests        = "SONARLESS_SCAN_TESTS"
+	FailOnGate       = "SONARLESS_FAIL_ON_GATE"
 	MetricsFile      = "SONARLESS_METRICS_FILE"
 	AutoUpdate       = "SONARLESS_AUTO_UPDATE"
 	UpdateNotice     = "SONARLESS_UPDATE_NOTICE"
@@ -83,6 +84,7 @@ var Keys = []Key{
 	{Name: Scanner, Project: true, Help: "force scanner: cli, maven, gradle or dotnet (auto when empty)"},
 	{Name: ScannerImage, Default: "sonarsource/sonar-scanner-cli:12.4", Project: true, Help: "sonar-scanner CLI image"},
 	{Name: ScanTests, Default: "false", Project: true, Help: "run tests during maven/gradle/dotnet scans (needed for coverage)"},
+	{Name: FailOnGate, Default: "false", Project: true, Help: "`sonarless-mcp scan` exits 2 when the quality gate fails, for CI and scripts (like scan --fail-on-gate)"},
 	{Name: MetricsFile, Default: "sonar-metrics.json", Project: true, Help: "file written by `sonarless-mcp results`"},
 }
 

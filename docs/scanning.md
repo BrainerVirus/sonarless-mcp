@@ -8,15 +8,30 @@ sonarless-mcp scan ../other-project    # another directory
 sonarless-mcp scan --tests             # build-based scans: run the tests too (coverage)
 sonarless-mcp scan --scanner gradle    # force cli, maven, gradle or dotnet
 sonarless-mcp scan -D sonar.exclusions=**/gen/**   # extra analysis property (repeatable)
+sonarless-mcp scan --fail-on-gate      # CI and scripts: exit 2 when the quality gate fails
 sonarless-mcp results                  # key metrics, saved to sonar-metrics.json
 sonarless-mcp results -o metrics.json
 sonarless-mcp project                  # detected root, key, name, scanner and where they came from
 ```
 
 `scan` prints the quality gate and the dashboard URL when the report is
-processed. It exits 0 whatever the gate says and 1 only when the scan itself
-fails, so read the gate from its output, from `results` or through the MCP
-tools.
+processed.
+
+### Exit status
+
+| Status | When |
+|---|---|
+| 0 | the scan finished, whatever the gate says (by default) |
+| 1 | the scan itself failed (or a usage error); with `--fail-on-gate`, also when the gate could not be read |
+| 2 | `--fail-on-gate` (or `SONARLESS_FAIL_ON_GATE=true`) and the quality gate failed (`ERROR`) |
+
+By default a failing gate is a result, not an error: read it from the output,
+from `results` or through the MCP tools (agents do). For CI and scripts that
+should stop on a failing gate, pass `--fail-on-gate` or set
+`SONARLESS_FAIL_ON_GATE=true` in the environment, `config.env` or the project's
+`.sonarless.env`; `--fail-on-gate=false` overrides the setting for one run. A
+passing gate, or a project with no gate (`NONE`), still exits 0. The agents'
+`sonarless_scan` tool is not affected.
 
 Scanners, picked per project:
 
