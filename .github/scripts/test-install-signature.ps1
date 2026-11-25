@@ -100,3 +100,6 @@ try {
     Remove-Item -Recurse -Force $w -ErrorAction SilentlyContinue
 }
 if ($script:failed) { exit 1 }
+# The Actions pwsh wrapper exits with $LASTEXITCODE, which the last refused
+# install (exit 1) left set: end with an explicit success.
+exit 0
