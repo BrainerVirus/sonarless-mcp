@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -112,11 +113,21 @@ func TestUpgradeInstallsTheLatestSignedRelease(t *testing.T) {
 	if got := fx.installed(t); !strings.Contains(got, "1.1.0 linux/amd64") {
 		t.Errorf("binary = %q", got)
 	}
-	if fi, _ := os.Stat(fx.exe); fi.Mode().Perm()&0o100 == 0 {
+	// Windows has no exec bit, and it moves the running binary aside to
+	// sonarless-mcp.old (removed by the next upgrade) instead of replacing it.
+	want := []string{"sonarless-mcp"}
+	if runtime.GOOS == "windows" {
+		want = append(want, "sonarless-mcp"+update.OldSuffix)
+	} else if fi, _ := os.Stat(fx.exe); fi.Mode().Perm()&0o100 == 0 {
 		t.Error("the new binary is not executable")
 	}
-	if entries, _ := os.ReadDir(filepath.Dir(fx.exe)); len(entries) != 1 {
-		t.Errorf("leftover files: %v", entries)
+	entries, _ := os.ReadDir(filepath.Dir(fx.exe))
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if !slices.Equal(names, want) {
+		t.Errorf("files next to the binary = %v, want %v", names, want)
 	}
 }
 
