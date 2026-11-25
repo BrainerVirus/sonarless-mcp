@@ -7,6 +7,9 @@
 #
 #   export PERF_DIR=/tmp/sl-perf; . scripts/perf/env.sh
 #
+# Sourcing it overrides HOME and the XDG dirs in the current shell, so run the
+# measurements in a subshell: ( . scripts/perf/env.sh; scripts/perf/es-scan.sh ... ).
+#
 # Build the binary with `go build -buildvcs=false -o "$PERF_DIR/sonarless-mcp" ./cmd/sonarless-mcp`.
 
 : "${PERF_DIR:?set PERF_DIR to an empty scratch dir}"
@@ -33,3 +36,5 @@ export PERF_MCPX_PORT="${PERF_MCPX_PORT:-19236}"
 unset SONARLESS_GATEWAY_TOKEN
 
 sl() { "$SONARLESS_BIN" "$@"; }
+
+echo "env.sh: this shell's HOME, XDG_* and SONARLESS_* now point at $PERF_DIR; use a subshell ( . scripts/perf/env.sh; ... ) or a new shell for anything else" >&2

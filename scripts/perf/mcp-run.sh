@@ -9,6 +9,21 @@
 # the perftest server must be running (sl start) for the token and the tools.
 set -euo pipefail
 : "${PERF_DIR:?source scripts/perf/env.sh first}"
+# Re-check the isolation here, not only in env.sh: never touch a real install.
+case "${SONARLESS_INSTANCE:-}" in
+*perftest*) ;;
+*)
+  echo "$(basename "$0"): SONARLESS_INSTANCE must contain perftest; source scripts/perf/env.sh first" >&2
+  exit 1
+  ;;
+esac
+case "${SONARLESS_HOME:-}" in
+"$PERF_DIR"/*) ;;
+*)
+  echo "$(basename "$0"): SONARLESS_HOME must be under PERF_DIR; source scripts/perf/env.sh first" >&2
+  exit 1
+  ;;
+esac
 label=$1 opts=$2
 shift 2
 here=$(cd "$(dirname "$0")" && pwd)
