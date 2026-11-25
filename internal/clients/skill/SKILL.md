@@ -1,6 +1,6 @@
 ---
 name: sonarless-mcp
-description: Local SonarQube for this machine via sonarless-mcp — scanning the workspace, checking code quality and quality gates, comparing local results with a remote/CI SonarQube server, adding or updating remote servers, aligning local rules with CI, checking for a newer sonarless-mcp or outdated copies of this skill, and troubleshooting the SonarQube MCP setup. Issues, hotspots, measures and gates come only from the `sonarqube` MCP tools (the CLI has no command for them). Use when the user mentions sonarless, sonarless-mcp, SonarQube, Sonar issues, code smells, quality gate, coverage, hotspots, or "what did CI find".
+description: Local SonarQube for this machine via sonarless-mcp — scanning the workspace, checking code quality and quality gates, comparing local results with a remote/CI SonarQube server, adding or updating remote servers, aligning local rules with CI, checking for a newer sonarless-mcp or outdated copies of this skill, and troubleshooting the SonarQube MCP setup. Use when the user mentions sonarless, sonarless-mcp, SonarQube, Sonar issues, code smells, quality gate, coverage, hotspots, or "what did CI find".
 ---
 <!-- managed by sonarless-mcp setup: updated automatically; changes here are overwritten -->
 
