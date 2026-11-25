@@ -55,12 +55,15 @@ Scrubbed transcripts of each run land in `bench/.transcripts/<model>/`
 | the same rule also in the description (5453 bytes) | 3 per case | 15/30 | 4/10 | 3/30 | 105,013 | $1.06 |
 | **shipped**: the rule at the top of the body, trimmed (5340 bytes) | 3 per case | 26/30 | 9/10 | 18/30 | 86,345 | $0.97 |
 | shipped + a "load it before the first tool" description (5542 bytes) | 3 per case | 14/30 | 4/10 | 3/30 | 95,184 | $0.97 |
+| shipped skill + "do not ask; answer from local" server instructions | 3 per case | 30/30 | 10/10 | 18/30 | 83,332 | $0.99 |
 | no skill (`--no-skill` control) | 1 per case | 4/10 | 4/10 | n/a | 110,566 | $0.35 |
 
-`bench/results/claude-haiku-4-5/` holds the shipped skill's runs,
-`bench/results/baseline/claude-haiku-4-5/` the skill before the bench,
-`bench/results/no-skill/claude-haiku-4-5/` the control and
-`bench/results/variants/load-hint-description/` the rejected description.
+`bench/results/claude-haiku-4-5/` holds the current runs (the last row but
+one), `bench/results/baseline/claude-haiku-4-5/` the skill before the bench,
+`bench/results/no-skill/claude-haiku-4-5/` the control,
+`bench/results/variants/load-hint-description/` the rejected description and
+`bench/results/variants/offline-before/` / `offline-instructions/`
+`remote-offline` before and after the server instructions change.
 
 What the skill adds is what it teaches once loaded: the CLI-only cases
 (`upgrade-check`, `skill-list`) and `pass-ci-gate` pass when it loads and
@@ -69,12 +72,19 @@ weak spot, and the description decides it: both descriptions that tried to
 steer loading (results come from the MCP tools; load it before the first
 tool) cut loads to 3 in 30 runs, about the control's pass rate. Keep the
 description a plain list of what the skill covers and measure any change to
-it. `remote-offline` (1/3) still fails: Haiku answers from the MCP server
-instructions without loading the skill, and asks instead of falling back.
+it.
 
-`compare` against the baseline exits 0: `file-issues` (1/1 before, 2/3 now)
-still passes at two thirds and is only marked "lower rate, still passes"; the
-baseline was a single run.
+`remote-offline` failed (1/3) because Haiku answers from the MCP server
+instructions without loading the skill, and asked instead of falling back.
+The fake server sends the shim's own remotes note (`mcp.RemotesNote`), which
+now says "do not ask; in the same reply say it is unreachable and answer with
+the same tool on server local": 3/3, both in its own run and in the full one.
+In that full run `compare-ci` failed 0/3 (Haiku scripted made-up CLI
+commands for issues instead of the MCP tools); a re-run of the case alone
+passed 3/3, which the stored results hold, so it was variance.
+
+`compare` against the baseline exits 0 with no case marked: every case passes
+in the stored results (the baseline was a single run per case).
 
 ## What a run does
 

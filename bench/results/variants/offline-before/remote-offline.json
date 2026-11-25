@@ -1,0 +1,106 @@
+{
+  "case": "remote-offline",
+  "model": "claude-haiku-4-5",
+  "key": "1-9d0d1bc9cd991377-08d02c6a1127a519-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 3,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 692,
+        "cacheCreation": 8607,
+        "cacheRead": 54062
+      },
+      "costUSD": 0.0261082,
+      "durationMs": 10694,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "answer": "The CI SonarQube server at `http://sonar.example.com` is currently unreachable (connection timeout). This could be due to a VPN connection issue or the server being down.\n\nWould you like me to check the local SonarQube instance instead to see what security hotspots are detected in your working copy? Or if you need the CI results specifically, you may need to verify your VPN connection and try again."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 36,
+        "output": 812,
+        "cacheCreation": 8801,
+        "cacheRead": 75074
+      },
+      "costUSD": 0.0292054,
+      "durationMs": 11430,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        },
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "The remote CI SonarQube is currently offline, but the local SonarQube scan found **1 security hotspot**:\n\n| Issue | Location | Category | Probability |\n|-------|----------|----------|-------------|\n| H1 | `src/payment.ts:3` | Weak Cryptography | MEDIUM |\n\nThe weak cryptography hotspot in the payment processing code (line 3 of `src/payment.ts`) has medium vulnerability probability and should be reviewed to ensure proper encryption practices are being used.\n\nWould you like me to show the specific code at that location, or run a fresh scan with `/sonarless-mcp`?"
+    },
+    {
+      "run": 3,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 639,
+        "cacheCreation": 8597,
+        "cacheRead": 54068
+      },
+      "costUSD": 0.0258238,
+      "durationMs": 10239,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "answer": "The CI SonarQube server at `http://sonar.example.com` is currently unreachable (network timeout) — it may be offline, or you might need to be connected to the VPN.\n\nI can check the local SonarQube instance instead to see what security hotspots are detected in your working copy. Would you like me to do that?"
+    }
+  ]
+}

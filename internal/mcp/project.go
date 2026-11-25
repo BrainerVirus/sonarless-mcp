@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+// RemotesNote follows the `server` choices in the instructions of a workspace
+// with remotes. The skill bench's fake server sends the same text.
+const RemotesNote = " Use the local server by default (the current working copy); query a remote one only when the user asks" +
+	" about CI or remote results. Remotes can be offline (e.g. VPN not connected): if one is unreachable, do not ask;" +
+	" in the same reply say it is unreachable and answer with the same tool on server \"local\"."
+
 // annotateInitialize tells the agent which project this workspace maps to
 // and which servers it can query.
 func (s *Shim) annotateInitialize(result json.RawMessage) json.RawMessage {
@@ -15,10 +21,7 @@ func (s *Shim) annotateInitialize(result json.RawMessage) json.RawMessage {
 			s.Project.Key, s.Project.KeySource)
 	}
 	if len(s.backends()) > 1 {
-		note.WriteString("\n\nEvery tool takes an optional `server` argument: " + s.serverHelp() +
-			" Use the local server by default (the current working copy); query a remote one only when the user asks" +
-			" about CI or remote results. Remotes can be offline (e.g. VPN not connected): if one is unreachable, say so" +
-			" and carry on with the local server.")
+		note.WriteString("\n\nEvery tool takes an optional `server` argument: " + s.serverHelp() + RemotesNote)
 	}
 	if len(s.Local) > 0 {
 		note.WriteString("\n\nsonarless-mcp also provides its own tools (sonarless_status, sonarless_project, sonarless_scan" +

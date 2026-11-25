@@ -34,7 +34,7 @@ An unknown key in either file is ignored with a warning.
 | `SONARLESS_MCP_PORT` | `9235` | shared MCP container port (127.0.0.1) |
 | `SONARLESS_MCP_IMAGE` | `sonarsource/sonarqube-mcp:latest` | SonarQube MCP server image |
 | `SONARLESS_GATEWAY_PORT` | `9233` | gateway that HTTP clients connect to (127.0.0.1); re-run `setup` after changing it |
-| `SONARLESS_MCP_TOOLSETS` | server default | comma-separated MCP toolsets to enable |
+| `SONARLESS_MCP_TOOLSETS` | `coverage,duplications,issues,measures,projects,quality-gates,rules,security-hotspots` | comma-separated MCP toolsets to enable; see [MCP toolsets](#mcp-toolsets) |
 | `SONARLESS_MCP_READ_ONLY` | `false` | disable the MCP write tools |
 | `SONARLESS_MCP_JAVA_OPTS` | `-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k` | JVM options of the shared MCP server (`JAVA_TOOL_OPTIONS`), about 200 MiB instead of ~300 with the same tool latency; `none` keeps the JVM defaults |
 | `SONARLESS_IDLE_TIMEOUT` | `30m` | stop the containers after this long unused; a bare number is minutes; `0` keeps them running |
@@ -67,6 +67,26 @@ Read from the environment only:
 | `SONARLESS_GATEWAY_SUPERVISED` | set by the login service; not for you to set |
 
 The installer has its own variables; see [Install](install.md#installer-options).
+
+### MCP toolsets
+
+Every tool the MCP server lists costs agent context on each session. The
+default is the SonarQube MCP server's own default without `dependency-risks`:
+its one tool, `search_dependency_risks`, needs SonarQube's software composition
+analysis (Enterprise), so on the local Community server it can only fail. That
+drops about 7% of the tool list (1.4 of 21.7 KB with one remote, MCP server
+1.33); every tool the skill and these docs name stays.
+
+- `SONARLESS_MCP_TOOLSETS=default` leaves the choice to the MCP server again
+  (`dependency-risks` comes back), for a remote with Advanced Security.
+- To add other toolsets, list them: for example
+  `coverage,duplications,issues,measures,projects,quality-gates,rules,security-hotspots,dependency-risks,sources,languages,system,webhooks,portfolios`
+  also enables the server's opt-in Server toolsets. The names are the
+  server's `SONARQUBE_TOOLSETS`; an unknown name is ignored and `projects` is
+  always on.
+
+The setting applies to the local and every remote MCP container; changing it
+recreates them on next use.
 
 ## Files
 
