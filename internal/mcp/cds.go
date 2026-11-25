@@ -309,8 +309,14 @@ jar=${CDS_JAR:-/app/sonarqube-mcp-server.jar}
 out="$d/$key.jsa" tmp="$d/.$key.jsa.tmp" lst="$d/.$key.classes"
 fail() { echo "cds: $*" >&2; exit 1; }
 # A finished background job stays a zombie until waited for, and kill -0
-# still reaches a zombie.
-alive() { [ -r "/proc/$1/status" ] && ! grep -q '^State:[[:space:]]*Z' "/proc/$1/status"; }
+# still reaches a zombie; /proc tells them apart (kill -0 where there is none).
+alive() {
+  if [ -d /proc/self ]; then
+    [ -r "/proc/$1/status" ] && ! grep -q '^State:[[:space:]]*Z' "/proc/$1/status"
+  else
+    kill -0 "$1" 2>/dev/null
+  fi
+}
 rm -f "$d"/.*.tmp "$d"/.*.classes
 trap 'rm -f "$tmp" "$lst"' EXIT
 JAVA_TOOL_OPTIONS="$CDS_OPTS -XX:DumpLoadedClassList=$lst" ${CDS_ENTRYPOINT:-/usr/local/bin/docker-entrypoint} >/tmp/cds-train.log 2>&1 &
@@ -318,7 +324,7 @@ pid=$!
 i=0
 until wget -q -O /dev/null "${CDS_HEALTH:-http://127.0.0.1:8080}/health" 2>/dev/null; do
   i=$((i + 1))
-  if [ "$i" -gt 600 ] || ! alive "$pid"; then
+  if [ "$i" -gt "${CDS_TRIES:-600}" ] || ! alive "$pid"; then
     tail -n 3 /tmp/cds-train.log >&2
     kill "$pid" 2>/dev/null
     fail "the training start never answered /health (is SonarQube reachable?)"

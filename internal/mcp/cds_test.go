@@ -533,7 +533,8 @@ exit 0
 		}
 	})
 	t.Run("no SonarQube", func(t *testing.T) {
-		dir, out, err := run(t, "WGET_FAIL=1", "CDS_ENTRYPOINT=true")
+		// CDS_TRIES bounds the wait where no /proc tells a zombie apart.
+		dir, out, err := run(t, "WGET_FAIL=1", "CDS_ENTRYPOINT=true", "CDS_TRIES=3")
 		if err == nil || !strings.Contains(out, "never answered /health") {
 			t.Fatalf("training without a server: %v %q", err, out)
 		}
