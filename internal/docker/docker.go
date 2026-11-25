@@ -140,9 +140,12 @@ func Stop(ctx context.Context, name string) error {
 	return err
 }
 
-// Remove force-removes a container; a missing container is not an error.
+// Remove force-removes a container and its anonymous volumes; a missing
+// container is not an error. Named volumes (the server's data) are kept. The
+// SonarQube image declares /opt/sonarqube/temp a volume, so without -v every
+// recreate of the server container left one anonymous volume behind.
 func Remove(ctx context.Context, name string) error {
-	_, err := Run(ctx, "rm", "-f", name)
+	_, err := Run(ctx, "rm", "-fv", name)
 	if errors.Is(err, ErrNotFound) {
 		return nil
 	}
