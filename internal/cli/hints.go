@@ -1,4 +1,4 @@
-package main
+package cli
 
 // Usage errors that name the flag you were probably after. Ported from ytrack
 // (github.com/BrainerVirus/youtrack-cli, pkg/cmd/root/root.go: flagHint,

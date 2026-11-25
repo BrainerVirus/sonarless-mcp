@@ -1,4 +1,4 @@
-package main
+package cli
 
 // The upgrade command's UX and wording follow ytrack's `ytrack upgrade`
 // (github.com/BrainerVirus/youtrack-cli, pkg/cmd/upgrade).

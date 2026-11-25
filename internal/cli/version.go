@@ -1,4 +1,4 @@
-package main
+package cli
 
 // Modeled on ytrack's `ytrack version` (github.com/BrainerVirus/youtrack-cli,
 // pkg/cmd/version), with a --json form.
@@ -14,8 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Set by the release build next to version: the short commit and the commit
-// date (YYYY-MM-DD).
+// The release build's short commit and commit date (YYYY-MM-DD), set by Main.
 var (
 	commit = ""
 	date   = ""

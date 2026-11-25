@@ -1,4 +1,4 @@
-package main
+package cli
 
 // Ported from ytrack's update notice (github.com/BrainerVirus/youtrack-cli,
 // pkg/cmd/root/update_notice.go).

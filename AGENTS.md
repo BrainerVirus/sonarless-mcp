@@ -18,7 +18,8 @@ in the README and LICENSE.
 
 | Path | Owns |
 |---|---|
-| `cmd/sonarless-mcp/` | CLI commands (cobra; `newRootCommand` in `main.go` builds the tree); `setup.go` wizard, `gateway.go` `serve`/`ensure`, `status.go` `status`/`stop`, `remote.go`, `skill.go`, `upgrade.go` self-upgrade (`update` is an alias), `version.go`, `notice.go` the terminal update notice, `hints.go` flag typo hints, `agenttools.go` the `sonarless_*` MCP tools |
+| `cmd/sonarless-mcp/` | `main`: the release build's version stamps, then `cli.Main` |
+| `internal/cli/` | CLI commands (cobra; `newRootCommand` in `main.go` builds the tree, `NewRootCommand` exports it to the skill bench's fake); `setup.go` wizard, `gateway.go` `serve`/`ensure`, `status.go` `status`/`stop`, `remote.go`, `skill.go`, `upgrade.go` self-upgrade (`update` is an alias), `version.go`, `notice.go` the terminal update notice, `hints.go` flag typo hints, `agenttools.go` the `sonarless_*` MCP tools |
 | `internal/config/` | layered settings: defaults < user `config.env` < project `.sonarless.env` < env |
 | `internal/docker/` | thin `docker` CLI wrapper (no SDK) |
 | `internal/sonar/` | SonarQube API client, server container lifecycle, shared token, file locks |
@@ -71,7 +72,7 @@ git config core.hooksPath .githooks   # once per clone: local commit-msg check
   The bench's sonarless-mcp is a fake on `PATH` that never calls docker or the
   network; see [bench/README.md](bench/README.md). Keep the skill accurate:
   trim it, never teach a command the CLI does not have.
-- `cmd/sonarless-mcp/docs_test.go` parses every `sonarless-mcp …` command line
+- `internal/cli/docs_test.go` parses every `sonarless-mcp …` command line
   in code spans and fenced blocks of `README.md`, `AGENTS.md`, `docs/` and the
   skill against the real command tree, and fails with `file:line` on an unknown
   command or flag. Write a deliberately wrong command line in plain text, not
@@ -106,7 +107,7 @@ git config core.hooksPath .githooks   # once per clone: local commit-msg check
   GitHub.
 - Exit statuses are a contract with CI and scripts: 0 success, 1 any error, 2
   a failing quality gate under `sonarless-mcp scan --fail-on-gate`
-  (`cmd/sonarless-mcp/scan.go`, listed in the root `--help` and
+  (`internal/cli/scan.go`, listed in the root `--help` and
   `docs/scanning.md`). Add a new one there, never reuse a number.
 
 ## Security

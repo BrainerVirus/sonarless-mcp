@@ -1,4 +1,4 @@
-package main
+package cli
 
 // Modeled on ytrack's `ytrack skill` (github.com/BrainerVirus/youtrack-cli,
 // pkg/cmd/skill): list, sync, install, uninstall and print.
