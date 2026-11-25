@@ -68,7 +68,8 @@ jobs:
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --snapshot --clean --skip=publish
+          # No cosign here: signing runs only in release.yml, with its OIDC identity.
+          args: release --snapshot --clean --skip=publish,sign
       # The single entry point (`install`) is valid sh and PowerShell; run it
       # the way users do, against the snapshot built above.
       - name: install (sh, piped like curl | sh)
