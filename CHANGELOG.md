@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.9.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.8.1...v0.9.0) (2026-11-25)
+
+### Features
+
+* **upgrade:** signed, soaked self-upgrade with --check, --version, a version command and a notice ([#9](https://github.com/BrainerVirus/sonarless-mcp/issues/9)) ([bb0f984](https://github.com/BrainerVirus/sonarless-mcp/commit/bb0f984e75a261b08d02221c411c87a3acdeeea6))
+
 ## [0.8.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.8.0...v0.8.1) (2026-11-21)
 
 ### Bug Fixes
