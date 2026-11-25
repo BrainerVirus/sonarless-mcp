@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.11.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.10.0...v0.11.0) (2026-11-25)
+
+### Features
+
+* **cli:** every env var in --help, docs/ topic pages and a docs drift test ([#12](https://github.com/BrainerVirus/sonarless-mcp/issues/12)) ([4e0541e](https://github.com/BrainerVirus/sonarless-mcp/commit/4e0541ee1ef638af9208504e05a515ee74b625ed))
+
 ## [0.10.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.9.0...v0.10.0) (2026-11-25)
 
 ### Features
