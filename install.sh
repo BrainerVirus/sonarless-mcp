@@ -4,8 +4,10 @@
 #   curl -fsSL https://raw.githubusercontent.com/BrainerVirus/sonarless-mcp/main/install.sh | sh
 #   curl -fsSL .../install.sh | sh -s -- --yes        # args go to `sonarless-mcp setup`
 #
-# Detects OS/CPU, downloads the matching release, verifies its checksum,
-# installs to ~/.local/bin, then opens the client picker (`sonarless-mcp setup`).
+# Detects OS/CPU, downloads the matching release, verifies its checksum (and,
+# when cosign is installed, the checksums file's Sigstore signature by this
+# repository's release workflow), installs to ~/.local/bin, then opens the
+# client picker (`sonarless-mcp setup`). Later upgrades: `sonarless-mcp upgrade`.
 #
 # Env: SONARLESS_MCP_VERSION (tag, default latest), SONARLESS_MCP_INSTALL_DIR,
 #      SONARLESS_MCP_BASE_URL (download base; for mirrors and tests),
@@ -13,6 +15,10 @@
 set -eu
 
 REPO="BrainerVirus/sonarless-mcp"
+# Who signs checksums.txt: release.yml on main (semantic-release runs on the
+# push to main). internal/update.ReleaseIdentity pins the same identity.
+SIGNER_ISSUER="https://token.actions.githubusercontent.com"
+SIGNER_IDENTITY='^https://github\.com/BrainerVirus/sonarless-mcp/\.github/workflows/release\.yml@refs/heads/main$'
 INSTALL_DIR="${SONARLESS_MCP_INSTALL_DIR:-$HOME/.local/bin}"
 
 say() { printf '%s\n' "$*"; }
@@ -60,6 +66,31 @@ trap 'rm -rf "$tmp"' EXIT INT TERM
 say "Detected $os/$arch. Downloading $asset..."
 fetch "$base/$asset" "$tmp/$asset" || die "download failed: $base/$asset"
 fetch "$base/checksums.txt" "$tmp/checksums.txt" || die "download failed: $base/checksums.txt"
+
+# Releases up to v0.8.1 were published before signing existed.
+pre_signing() { # tag
+  v="${1#v}"; v="${v%%-*}"
+  major="${v%%.*}"; rest="${v#*.}"; minor="${rest%%.*}"; patch="${rest#*.}"
+  case "$major.$minor.$patch" in *[!0-9.]* | .* | *..* | *.) return 1 ;; esac
+  [ "$major" -eq 0 ] && { [ "$minor" -lt 8 ] || { [ "$minor" -eq 8 ] && [ "$patch" -le 1 ]; }; }
+}
+if command -v cosign >/dev/null 2>&1; then
+  if fetch "$base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json" 2>/dev/null; then
+    cosign verify-blob \
+      --bundle "$tmp/checksums.txt.sigstore.json" \
+      --certificate-oidc-issuer "$SIGNER_ISSUER" \
+      --certificate-identity-regexp "$SIGNER_IDENTITY" \
+      "$tmp/checksums.txt" >/dev/null 2>&1 ||
+      die "the signature of checksums.txt does not verify; nothing was installed"
+    say "Verified the cosign signature of checksums.txt."
+  elif pre_signing "${SONARLESS_MCP_VERSION:-}"; then
+    say "$SONARLESS_MCP_VERSION was published before releases were signed; checking its SHA-256 only."
+  else
+    die "the release has no signature (checksums.txt.sigstore.json); nothing was installed"
+  fi
+else
+  say "cosign not found; skipping the signature check (the SHA-256 is still checked)."
+fi
 
 want="$(grep " $asset\$" "$tmp/checksums.txt" | cut -d' ' -f1)"
 [ -n "$want" ] || die "$asset not listed in checksums.txt"
