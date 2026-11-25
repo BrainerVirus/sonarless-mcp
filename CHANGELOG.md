@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.13.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.12.0...v0.13.0) (2026-11-25)
+
+### Features
+
+* **scan:** opt-in --fail-on-gate exits 2 on a failing quality gate ([#14](https://github.com/BrainerVirus/sonarless-mcp/issues/14)) ([91d690f](https://github.com/BrainerVirus/sonarless-mcp/commit/91d690f61322e718f673bd77e063732220b88145))
+
 ## [0.12.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.11.0...v0.12.0) (2026-11-25)
 
 ### Features
