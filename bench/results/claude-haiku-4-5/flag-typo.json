@@ -1,7 +1,7 @@
 {
   "case": "flag-typo",
   "model": "claude-haiku-4-5",
-  "key": "1-496b3f70e6018569-0445926b0757f8a0-claude-haiku-4-5",
+  "key": "1-496b3f70e6018569-08d02c6a1127a519-claude-haiku-4-5",
   "passes": 3,
   "graded": 3,
   "pass": true,
@@ -9,20 +9,21 @@
     {
       "run": 1,
       "status": "pass",
-      "turns": 3,
+      "turns": 4,
       "tokens": {
-        "input": 26,
-        "output": 348,
-        "cacheCreation": 8141,
-        "cacheRead": 53471
+        "input": 34,
+        "output": 524,
+        "cacheCreation": 8507,
+        "cacheRead": 74632
       },
-      "costUSD": 0.023395100000000002,
-      "durationMs": 6100,
+      "costUSD": 0.027131200000000005,
+      "durationMs": 7910,
       "skillLoaded": false,
       "skillListed": true,
       "mcpConnected": true,
       "commands": [
-        "sonarless-mcp scan --fail-on-gates; echo \"Exit status: $?\"",
+        "sonarless-mcp scan --fail-on-gates",
+        "sonarless-mcp scan --fail-on-gate",
         "sonarless-mcp scan --fail-on-gate; echo \"Exit status: $?\""
       ],
       "calls": [
@@ -39,9 +40,16 @@
             "--fail-on-gate"
           ],
           "exit": 0
+        },
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gate"
+          ],
+          "exit": 0
         }
       ],
-      "answer": "The scan completed successfully with **exit status 0**, which means the **Quality gate PASSED**. The project \"demo-app\" meets all quality gate criteria."
+      "answer": "The quality gate **PASSED** with exit status **0**. \n\nExit status 0 indicates success — when you use `--fail-on-gate`, the scan returns 0 if the quality gate passes and a non-zero exit code if it fails. In this case, the demo-app project meets all quality gate criteria."
     },
     {
       "run": 2,
@@ -49,18 +57,18 @@
       "turns": 3,
       "tokens": {
         "input": 26,
-        "output": 624,
-        "cacheCreation": 8388,
-        "cacheRead": 53692
+        "output": 434,
+        "cacheCreation": 8250,
+        "cacheRead": 53717
       },
-      "costUSD": 0.025291200000000003,
-      "durationMs": 8576,
+      "costUSD": 0.0240677,
+      "durationMs": 7517,
       "skillLoaded": false,
       "skillListed": true,
       "mcpConnected": true,
       "commands": [
         "sonarless-mcp scan --fail-on-gates",
-        "sonarless-mcp scan --fail-on-gate; echo \"Exit status: $?\""
+        "sonarless-mcp scan --fail-on-gate"
       ],
       "calls": [
         {
@@ -78,25 +86,26 @@
           "exit": 0
         }
       ],
-      "answer": "The quality gate **PASSED**. The exit status is **0**, which indicates success. The scan completed analysis in 48 seconds with no quality gate violations."
+      "answer": "The quality gate **PASSED**. The exit status was 0 (success), which means the project meets all quality gate criteria. The `--fail-on-gate` flag causes the command to exit with a non-zero status if the gate fails, so a successful exit here indicates the gate is passing."
     },
     {
       "run": 3,
       "status": "pass",
-      "turns": 3,
+      "turns": 4,
       "tokens": {
-        "input": 26,
-        "output": 431,
-        "cacheCreation": 8159,
-        "cacheRead": 53479
+        "input": 34,
+        "output": 492,
+        "cacheCreation": 8490,
+        "cacheRead": 74616
       },
-      "costUSD": 0.023846900000000004,
-      "durationMs": 6963,
+      "costUSD": 0.026935600000000004,
+      "durationMs": 7471,
       "skillLoaded": false,
       "skillListed": true,
       "mcpConnected": true,
       "commands": [
-        "sonarless-mcp scan --fail-on-gates; echo \"Exit status: $?\"",
+        "sonarless-mcp scan --fail-on-gates",
+        "sonarless-mcp scan --fail-on-gate",
         "sonarless-mcp scan --fail-on-gate; echo \"Exit status: $?\""
       ],
       "calls": [
@@ -113,9 +122,16 @@
             "--fail-on-gate"
           ],
           "exit": 0
+        },
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gate"
+          ],
+          "exit": 0
         }
       ],
-      "answer": "The scan completed successfully with **exit status 0**, which indicates the project **passed the quality gate**. The output shows:\n\n- **Quality gate: PASSED**\n- Exit status 0 (success)\n\nThe dashboard is available at http://localhost:9234/dashboard?id=demo-app if you want to see the full analysis details."
+      "answer": "The quality gate **PASSED**. The exit status is **0**, which means the project meets all quality gate requirements. When using the `--fail-on-gate` flag, an exit code of 0 indicates success (gate passed), while a non-zero exit code would indicate the gate failed."
     }
   ]
 }
