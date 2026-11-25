@@ -76,7 +76,7 @@ var Keys = []Key{
 	{Name: GatewayPort, Default: "9233", Help: "host port of the gateway AI clients connect to directly over HTTP (127.0.0.1)"},
 	{Name: MCPImage, Default: "sonarsource/sonarqube-mcp:latest", Help: "SonarQube MCP server image"},
 	{Name: MCPToolsets, Default: DefaultMCPToolsets, HelpDefault: "the MCP server's own minus dependency-risks; see docs/configuration.md",
-		Help: "comma-separated toolset names the MCP server enables; default hands the choice to the MCP server"},
+		Help: "comma-separated toolset names the MCP server enables; the value `default` (or empty) hands the choice to the MCP server"},
 	{Name: MCPReadOnly, Default: "false", Help: "disable MCP write tools"},
 	{Name: MCPJavaOpts, Default: "-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k", Help: "JVM options of the shared MCP server (JAVA_TOOL_OPTIONS); a small heap and C1-only JIT keep it near 200 MiB; none leaves the JVM defaults"},
 	{Name: IdleTimeoutKey, Default: "30m", Help: "stop server+MCP after this long unused; 0 disables"},

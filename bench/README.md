@@ -83,9 +83,8 @@ In that full run `compare-ci` failed 0/3 (Haiku scripted made-up CLI
 commands for issues instead of the MCP tools); a re-run of the case alone
 passed 3/3, which the stored results hold, so it was variance.
 
-`compare` against the baseline exits 0: `file-issues` (1/1 before, 2/3 now)
-still passes at two thirds and is only marked "lower rate, still passes"; the
-baseline was a single run.
+`compare` against the baseline exits 0 with no case marked: every case passes
+in the stored results (the baseline was a single run per case).
 
 ## What a run does
 
