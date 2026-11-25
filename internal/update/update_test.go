@@ -193,8 +193,8 @@ func TestAllowUnsigned(t *testing.T) {
 	legacy := func(string) []byte { return []byte("legacy sonarless-mcp version 0.8.1") }
 	releases := func() []*updatetest.Release {
 		return []*updatetest.Release{
+			{Version: "0.8.0", SignOther: true},
 			{Version: "0.8.1", Unsigned: true, Binary: legacy},
-			{Version: "0.9.0", SignOther: true},
 			{Version: "1.0.0"},
 			{Version: "1.1.0", Unsigned: true},
 		}
@@ -225,8 +225,17 @@ func TestAllowUnsigned(t *testing.T) {
 
 	t.Run("given an older release whose signature is invalid, the flag does not skip it", func(t *testing.T) {
 		fx := newFixture(t, "1.0.0", releases()...)
-		_, err := fx.u.Upgrade(context.Background(), "v0.9.0", true)
+		_, err := fx.u.Upgrade(context.Background(), "v0.8.0", true)
 		if !errors.Is(err, update.ErrRefused) || !strings.Contains(err.Error(), "signature verification failed") {
+			t.Fatalf("err = %v", err)
+		}
+		fx.assertUnchanged(t, "1.0.0")
+	})
+
+	t.Run("given an older unsigned release from after signing began, the flag is refused", func(t *testing.T) {
+		fx := newFixture(t, "1.0.0", &updatetest.Release{Version: "0.9.5", Unsigned: true}, &updatetest.Release{Version: "1.0.0"})
+		_, err := fx.u.Upgrade(context.Background(), "v0.9.5", true)
+		if err == nil || !strings.Contains(err.Error(), "from before signing (0.8.1 or older)") {
 			t.Fatalf("err = %v", err)
 		}
 		fx.assertUnchanged(t, "1.0.0")

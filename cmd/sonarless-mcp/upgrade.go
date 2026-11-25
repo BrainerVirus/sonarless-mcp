@@ -89,10 +89,10 @@ must match its SHA-256 in that file. The new binary must then run
 Any failed check refuses the upgrade and changes nothing; the next start runs
 the new binary.
 
-Releases published before signing existed carry no signature. To go back to
-one of them, name it and pass --allow-unsigned: it is then installed on its
-checksum alone. A newer release without a signature, or any release whose
-signature fails, is always refused.
+Releases published before signing existed (v0.8.1 and older) carry no
+signature. To go back to one of them, name it and pass --allow-unsigned: it is
+then installed on its checksum alone. A later release without a signature, or
+any release whose signature fails, is always refused.
 
 sonarless-mcp also upgrades itself in the background, once a newer release is
 a day old (checked daily); SONARLESS_AUTO_UPDATE=false turns that off. In a

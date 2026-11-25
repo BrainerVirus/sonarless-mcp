@@ -148,6 +148,11 @@ func (u *Upgrader) result(rel *Release) *Result {
 	}
 }
 
+// LastUnsignedRelease is the newest release published before releases were
+// signed; --allow-unsigned never installs a later one (install.sh and
+// install.ps1 use the same cutoff).
+const LastUnsignedRelease = "0.8.1"
+
 // Upgrade installs the latest release when it is newer than the running one,
 // or the release named by tag (also an older one). allowUnsigned installs a
 // release without a signature on its checksum alone, and only an older
@@ -169,6 +174,8 @@ func (u *Upgrader) Upgrade(ctx context.Context, tag string, allowUnsigned bool) 
 		return res, nil
 	case allowUnsigned && !Newer(u.Current, res.Latest):
 		return nil, fmt.Errorf("--allow-unsigned only installs a release older than the running %s; %s is not", u.Current, res.Latest)
+	case allowUnsigned && Newer(res.Latest, LastUnsignedRelease):
+		return nil, fmt.Errorf("--allow-unsigned only installs a release from before signing (%s or older); %s must be signed", LastUnsignedRelease, res.Latest)
 	}
 	if err := u.install(ctx, rel, res, allowUnsigned); err != nil {
 		return nil, err

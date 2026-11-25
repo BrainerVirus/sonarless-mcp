@@ -147,8 +147,8 @@ sha256sum --ignore-missing -c checksums.txt
 
 Releases up to v0.8.1 were published before signing existed. To go back to one
 of them, name it and opt in: `sonarless-mcp upgrade --version v0.8.1 --allow-unsigned`
-installs it on its checksum alone. The flag only accepts a release older than
-the installed one; a newer release without a valid signature is always
+installs it on its checksum alone. The flag only accepts a release that is v0.8.1
+or older and older than the installed one; any later release without a valid signature is always
 refused. The install scripts do the same check when `cosign` is on your PATH:
 they first resolve "latest" to its tag through the GitHub API, and accept a
 missing signature only when that release (latest or a pinned
