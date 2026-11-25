@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.15.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.15.0...v0.15.1) (2026-11-25)
+
+### Bug Fixes
+
+* **docker:** drop anonymous volumes on removal; measured es heap, mcp memory, appcds ([#17](https://github.com/BrainerVirus/sonarless-mcp/issues/17)) ([aea58bb](https://github.com/BrainerVirus/sonarless-mcp/commit/aea58bb7b25bf7f28f9a22bdacf2ce205562268c))
+
 ## [0.15.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.14.0...v0.15.0) (2026-11-25)
 
 ### Features
