@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.12.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.11.0...v0.12.0) (2026-11-25)
+
+### Features
+
+* **mcp:** remote changes reach running gateway sessions on the next request ([#13](https://github.com/BrainerVirus/sonarless-mcp/issues/13)) ([55e4c08](https://github.com/BrainerVirus/sonarless-mcp/commit/55e4c0828839749f209f76cbdb6234f053990cfc))
+
 ## [0.11.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.10.0...v0.11.0) (2026-11-25)
 
 ### Features
