@@ -14,7 +14,7 @@ Measured on 2026-11-25: Linux 6.8, 14 cores, 31 GiB RAM, Docker 29.10, SonarQube
 | Question | Result | Default |
 |---|---|---|
 | Is a 256m Elasticsearch heap enough for a large repo? | Yes. No OutOfMemoryError, no full GC, live old generation at most 72 MiB; same compute-engine time as 384m | `SONARLESS_SEARCH_HEAP=256m` kept |
-| Where does the MCP JVM's memory outside the heap go? | Class metadata (71 MiB) and symbols (34 MiB) for 14.5k classes; code cache 13 MiB; 82 threads 8 MiB | `SONARLESS_MCP_JAVA_OPTS` kept |
+| Where does the MCP JVM's memory outside the heap go? | Class metadata (71 MiB) and symbols (34 MiB) for 14.5k loaded classes; code cache 13 MiB; 82 threads 8 MiB | `SONARLESS_MCP_JAVA_OPTS` kept |
 | Does AppCDS help the MCP JVM? | Yes: ready in 2.0 s instead of 4.1 s, java RSS 28 MiB lower | not wired in; see [AppCDS](#appcds-for-the-mcp-jvm) |
 
 ## Elasticsearch heap: 256m against 384m
@@ -53,17 +53,18 @@ the page cache, so the heap is not its whole footprint.
 
 ## MCP JVM native memory
 
-**Method.** Run the MCP container with the default `SONARLESS_MCP_JAVA_OPTS`
-plus `-XX:NativeMemoryTracking=summary`, run an agent-like session (initialize,
-`tools/list`, 12 tool calls: projects, quality gate, measures, six pages of
-issues, three rules), then read `VM.native_memory summary`. The image ships
-only `java`, so `jcmd` runs from a JDK 21 container that shares the MCP
-container's PID namespace and user (`--pid container:<mcp> --user 100:101`).
+**Method.** `scripts/perf/mcp-nmt.sh` runs the MCP container with the default
+`SONARLESS_MCP_JAVA_OPTS` plus `-XX:NativeMemoryTracking=summary`, runs an
+agent-like session (initialize, `tools/list`, 12 tool calls: projects, quality
+gate, measures, six pages of issues, three rules), then reads
+`VM.native_memory summary`. The image ships only `java`, so `jcmd` runs from a
+JDK 21 container that shares the MCP container's PID namespace and user
+(`--pid container:<mcp> --user 100:101`).
 
 | Area (committed) | Default | With AppCDS |
 |---|---|---|
 | Java heap | 64.0 MiB | 64.0 MiB |
-| Metaspace (class metadata) | 71.0 MiB | 4.1 MiB |
+| Metaspace (non-class metadata) | 71.0 MiB | 4.1 MiB |
 | Symbol | 34.3 MiB | 2.3 MiB |
 | Code (C1 only) | 13.2 MiB | 11.8 MiB |
 | Class space and class malloc | 11.2 MiB | 2.7 MiB |
@@ -73,10 +74,21 @@ container's PID namespace and user (`--pid container:<mcp> --user 100:101`).
 | NMT's own bookkeeping | 4.5 MiB | 1.4 MiB |
 | Total committed | 209.2 MiB | 196.3 MiB |
 
-The 14.5k classes the server loads cost more than its heap: metadata and
-symbols together are 105 MiB. None of the JVM flags in reach shrinks them
-without a regression: `MaxMetaspaceSize=128m` is only a ceiling (79 MiB used),
-and the thread count is the server's own pools. AppCDS moves both into a
+At the moment of the read the JVM had 14,507 classes loaded (13,474 instance
+classes and 1,033 array classes, NMT's count). They cost more than the heap:
+metadata and symbols together are 105 MiB.
+
+`MaxMetaspaceSize=128m` caps class metadata and class space together. The
+table shows committed memory; NMT also reports what is used inside it:
+metadata used 70.0 MiB (70.6 MiB committed; the table's 71.0 MiB adds the
+category's own malloc) plus class space used 9.2 MiB (9.8 MiB committed) make
+the 79 MiB of the cap in use. The cap only limits growth, so lowering it frees
+nothing and only brings an OutOfMemoryError in Metaspace closer. The
+thread count comes from the server's own pools, not from a JVM option.
+
+Apart from AppCDS, no option to shrink metadata or symbols was measured. The
+size follows the number of classes the server loads, and AppCDS is the one
+change measured that moves both out of committed native memory: into a
 read-only mapped file, of which only the pages touched are resident.
 
 ## AppCDS for the MCP JVM
@@ -84,13 +96,19 @@ read-only mapped file, of which only the pages touched are resident.
 **Method.** The image's jlinked JDK has no base CDS archive, so
 `-XX:+AutoCreateSharedArchive` only warns
 (`ArchiveClassesAtExit is unsupported when base CDS archive is not loaded`).
-A static archive works: a training run with `-XX:DumpLoadedClassList` and the
-agent session records 12,965 classes, then `java -Xshare:dump` with the same
-options writes a 101 MiB archive in about 5 s. Runs with
-`-XX:SharedArchiveFile=<archive>` load 12,443 of 13,299 classes from it. Each
-run starts a fresh container and measures `docker run` to `/health` answering
-200, then the java RSS (`VmRSS`) and the container's memory (`docker stats`)
-10 s after ready and after the agent session.
+A static archive works (`scripts/perf/mcp-cds.sh`): a training run with
+`-XX:DumpLoadedClassList` and the agent session writes a class list of 12,965
+lines (the classes the JVM may archive, lambda entries included, recorded up
+to the training run's exit), then `java -Xshare:dump` with the same options
+writes a 101 MiB archive in about 5 s. In a run with the archive,
+`-Xlog:class+load` logged 13,299 instance classes loaded up to the container's
+stop, 12,443 of them from the archive. The three counts differ because each
+is taken at a different point and counts different things: the list leaves
+out classes the JVM cannot archive, the log counts instance classes only, and
+NMT's 14,507 includes array classes. Each run starts a fresh container and measures
+`docker run` to `/health` answering 200, then the java RSS (`VmRSS`) and the
+container's memory (`docker stats`) 10 s after ready and after the agent
+session.
 
 | | Ready (median) | Java RSS idle | Java RSS after session | Container after session |
 |---|---|---|---|---|
@@ -103,7 +121,8 @@ AppCDS is a clear win, but it is a feature rather than a new default value: the
 archive must be built for each MCP image (a training start and a dump, about
 10 s, after every image update), stored somewhere that survives container
 recreation (about 100 MiB), and passed in `JAVA_TOOL_OPTIONS`. With a stale
-archive (the same jar with another timestamp mounted over it) the JVM logs
+archive (`scripts/perf/mcp-stale.sh`: the same jar with another timestamp
+mounted over it) the JVM logs
 `[cds] ... timestamp has changed`, runs without the archive and lands on the
 default numbers (ready 3.3 s, RSS 218 MiB), so a stale archive costs startup
 time, not correctness. Wiring it into sonarless-mcp is left as a
@@ -111,24 +130,35 @@ follow-up.
 
 ## Repeat the measurements
 
+Sourcing `scripts/perf/env.sh` points `HOME`, the `XDG_*` dirs and every
+`SONARLESS_*` setting of the current shell at `PERF_DIR`, so run everything in
+a subshell. Each script also checks on its own that `SONARLESS_INSTANCE`
+contains `perftest` and that `SONARLESS_HOME` is under `PERF_DIR`, and stops
+before any docker call if not.
+
 ```sh
 export PERF_DIR=$(mktemp -d)
 go build -buildvcs=false -o "$PERF_DIR/sonarless-mcp" ./cmd/sonarless-mcp
-. scripts/perf/env.sh            # perftest instance, ports 19233 to 19236
 mkdir "$PERF_DIR/repo"           # scans write .scannerwork: scan a copy
 git -C <repo> archive HEAD | tar -x -C "$PERF_DIR/repo"
-sl start
-scripts/perf/es-scan.sh es256 "$PERF_DIR/repo"
-scripts/perf/es-burst.sh es256-burst <project key>
-SONARLESS_SEARCH_HEAP=384m sl start              # recreates the server, data kept
-SONARLESS_SEARCH_HEAP=384m scripts/perf/es-scan.sh es384 "$PERF_DIR/repo"
-opts='-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k'
-scripts/perf/mcp-run.sh base "$opts"
-scripts/perf/mcp-cds.sh "$opts"
-scripts/perf/mcp-run.sh cds "$opts -XX:SharedArchiveFile=/cds/app.jsa" -v "$PERF_DIR/cds:/cds:ro"
+(
+  . scripts/perf/env.sh          # perftest instance, ports 19233 to 19236
+  sl start
+  scripts/perf/es-scan.sh es256 "$PERF_DIR/repo"
+  scripts/perf/es-burst.sh es256-burst <project key>
+  SONARLESS_SEARCH_HEAP=384m sl start            # recreates the server, data kept
+  SONARLESS_SEARCH_HEAP=384m scripts/perf/es-scan.sh es384 "$PERF_DIR/repo"
+  opts='-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k'
+  scripts/perf/mcp-run.sh base "$opts"
+  scripts/perf/mcp-nmt.sh nmt "$opts"
+  scripts/perf/mcp-cds.sh "$opts"
+  scripts/perf/mcp-run.sh cds "$opts -XX:SharedArchiveFile=/cds/app.jsa" -v "$PERF_DIR/cds:/cds:ro"
+  scripts/perf/mcp-nmt.sh nmt-cds "$opts -XX:SharedArchiveFile=/cds/app.jsa" -v "$PERF_DIR/cds:/cds:ro"
+  scripts/perf/mcp-stale.sh "$opts"
+)
 ```
 
 Afterwards remove only the perftest resources: the containers `perftest-server`
-and `perftest-mcpx`, the network `perftest`, the volumes
-`perftest-server-<version>-{data,extensions,logs}` and the server's anonymous
-`/opt/sonarqube/temp` volume (`docker inspect perftest-server` lists it).
+and `perftest-mcpx` (with `docker rm -fv`, which also drops the server's
+anonymous `/opt/sonarqube/temp` volume), the network `perftest` and the
+volumes `perftest-server-<version>-{data,extensions,logs}`.
