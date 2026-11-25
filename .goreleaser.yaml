@@ -6,7 +6,13 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
-    ldflags: ["-s -w -X main.version={{.Version}}"]
+    # `sonarless-mcp version` prints these. The date is the commit date, not
+    # the build time.
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{ slice .CommitDate 0 10 }}
 
 archives:
   - name_template: "sonarless-mcp_{{ .Os }}_{{ .Arch }}" # stable names for releases/latest/download
@@ -18,6 +24,22 @@ archives:
 
 checksum:
   name_template: checksums.txt
+
+# Keyless cosign signature of the checksums file (checksums.txt.sigstore.json),
+# made with the release workflow's GitHub OIDC identity (release.yml grants
+# id-token: write and installs cosign). `sonarless-mcp upgrade` refuses a
+# release without a valid one (internal/update.ReleaseIdentity).
+signs:
+  - id: cosign-keyless
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --bundle=${signature}
+      - --yes
+      - ${artifact}
+    output: true
 
 # semantic-release creates the GitHub Release and its notes; GoReleaser only
 # attaches the binaries to it.

@@ -24,6 +24,11 @@ jobs:
   release:
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # tag, CHANGELOG commit, GitHub Release + assets
+      issues: write # semantic-release "released in" comments
+      pull-requests: write
+      id-token: write # cosign keyless: sign checksums.txt with this workflow's OIDC identity
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,6 +41,13 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --ignore-scripts
+      # GoReleaser's `signs` runs cosign on checksums.txt. The certificate
+      # names https://github.com/BrainerVirus/sonarless-mcp/.github/workflows/release.yml@refs/heads/main
+      # (issuer https://token.actions.githubusercontent.com), which
+      # internal/update.ReleaseIdentity pins.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.4
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
