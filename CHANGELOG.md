@@ -2,6 +2,12 @@
 
 All notable changes are generated from [Conventional Commits](https://www.conventionalcommits.org/) by semantic-release; GitHub Releases carry the same notes.
 
+## [0.16.0](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.15.1...v0.16.0) (2026-11-25)
+
+### Features
+
+* **mcp:** start the MCP JVM from an AppCDS archive built in the background ([#18](https://github.com/BrainerVirus/sonarless-mcp/issues/18)) ([bc41b09](https://github.com/BrainerVirus/sonarless-mcp/commit/bc41b09079a7936b4f8ed790f6100d1266274ef6))
+
 ## [0.15.1](https://github.com/BrainerVirus/sonarless-mcp/compare/v0.15.0...v0.15.1) (2026-11-25)
 
 ### Bug Fixes
