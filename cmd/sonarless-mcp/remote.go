@@ -394,7 +394,7 @@ func addRemote(ctx context.Context, cfg *config.Config, r remote.Remote, token s
 	if saved.Branch != "" {
 		fmt.Printf(", branch %s", saved.Branch)
 	}
-	fmt.Printf("). MCP tools now accept server: %q; restart your AI clients to see it.\n", saved.Name)
+	fmt.Printf("). MCP tools now accept server: %q; running AI clients see it on their next request.\n", saved.Name)
 	return nil
 }
 

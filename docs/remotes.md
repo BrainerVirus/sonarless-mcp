@@ -39,10 +39,12 @@ working copy as last scanned) or a remote's name (what CI found, on the
 remote's default branch). The workspace's project key and the remote's branch
 are filled in.
 
-Restart your AI client after adding or changing a remote. With direct HTTP
-clients the gateway keeps each workspace's session, with the remotes it started
-with, until it has been unused for an hour; `sonarless-mcp stop --all` ends
-every session at once.
+No restart is needed after `remote add`, `update` or `remove` (or an edit of
+`remotes.json`): the gateway and the stdio bridge notice the change on their
+next request, so that request can already use the new remote. Calls already
+running finish where they started. Clients that follow tool-list change
+notifications refresh the `server` choices at once; others show them after
+they reconnect to the MCP server (for example `/mcp` in Claude Code).
 
 ## Judge local scans like CI
 

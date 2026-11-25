@@ -147,6 +147,18 @@ type Shim struct {
 	// notify receives server-initiated messages (tools/list_changed) when there
 	// is no stdout: the gateway forwards them on its GET event streams.
 	notify func(message)
+	// Reload rebuilds the backends ([0] local) after remotes.json or a remote's
+	// token file changed, so a remote added, updated or removed (or a new
+	// token) reaches this session on its next request. nil keeps the backends
+	// the shim started with.
+	Reload func() ([]*Backend, error)
+
+	backendsMu sync.RWMutex // guards Backends once the shim runs
+	remotesMu  sync.Mutex   // serializes reloads
+	remotesSig string       // remotes.json as last seen (size and mtime)
+	// remotesRetry, after a failed reload, is when the same files are tried
+	// again; zero once a reload succeeded.
+	remotesRetry time.Time
 
 	http         *http.Client
 	out          io.Writer
@@ -174,10 +186,18 @@ type rpcError struct {
 
 func (m *message) isRequest() bool { return m.Method != "" && len(m.ID) > 0 && string(m.ID) != "null" }
 
-func (s *Shim) local() *Backend { return s.Backends[0] }
+func (s *Shim) local() *Backend { return s.backends()[0] }
+
+// backends is the current list of backends; a reload swaps it, so callers
+// keep the snapshot they got (an in-flight call finishes on its backend).
+func (s *Shim) backends() []*Backend {
+	s.backendsMu.RLock()
+	defer s.backendsMu.RUnlock()
+	return s.Backends
+}
 
 func (s *Shim) backend(name string) *Backend {
-	for _, b := range s.Backends {
+	for _, b := range s.backends() {
 		if b.Name == name {
 			return b
 		}
@@ -189,6 +209,7 @@ func (s *Shim) backend(name string) *Backend {
 func (s *Shim) start(ctx context.Context) {
 	s.http = &http.Client{} // tool calls (e.g. analysis) can be slow; rely on ctx
 	s.booted = make(chan struct{})
+	s.remotesSig = s.remotesStamp()
 	go func() {
 		err := s.local().boot(ctx, s.Project)
 		s.bootErr = err
@@ -227,6 +248,7 @@ func (s *Shim) Run(ctx context.Context, in io.Reader, out io.Writer) error {
 
 func (s *Shim) handle(ctx context.Context, msg message, out func(message)) {
 	s.touch()
+	s.reloadRemotes()
 	switch msg.Method {
 	case "initialize", "tools/list":
 		wait := cacheWait
@@ -378,7 +400,7 @@ func (s *Shim) toolFailure(out func(message), req message, text string) {
 
 func (s *Shim) names() []string {
 	var out []string
-	for _, b := range s.Backends {
+	for _, b := range s.backends() {
 		out = append(out, b.Name)
 	}
 	return out
@@ -580,6 +602,60 @@ func (s *Shim) send(m message) {
 	s.outMu.Lock()
 	defer s.outMu.Unlock()
 	_, _ = s.out.Write(append(b, '\n'))
+}
+
+// remotesStamp identifies the current version of remotes.json and of the
+// remotes' token files (remotes/<name>.token), so a token written on its own
+// reloads too. A few stats per request are cheap next to the HTTP call.
+func (s *Shim) remotesStamp() string {
+	if s.Cfg == nil {
+		return ""
+	}
+	files, _ := filepath.Glob(filepath.Join(s.Cfg.ConfigDir, "remotes", "*.token"))
+	files = append(files, filepath.Join(s.Cfg.ConfigDir, "remotes.json"))
+	var b strings.Builder
+	for _, f := range files {
+		if fi, err := os.Stat(f); err == nil {
+			fmt.Fprintf(&b, "%s:%d/%d;", filepath.Base(f), fi.Size(), fi.ModTime().UnixNano())
+		}
+	}
+	return b.String()
+}
+
+// reloadRetryAfter is how long a failed reload waits before the unchanged
+// files are tried again.
+var reloadRetryAfter = 10 * time.Second
+
+// reloadRemotes picks up remotes.json and token changes (remote add,
+// update, remove) without a client restart: the remote backends are rebuilt,
+// the booted local one is kept, and clients are told the tool list (its
+// `server` choices) changed. Requests already routed finish on the old backends.
+func (s *Shim) reloadRemotes() {
+	if s.Reload == nil {
+		return
+	}
+	stamp := s.remotesStamp()
+	s.remotesMu.Lock()
+	defer s.remotesMu.Unlock()
+	if stamp == s.remotesSig && (s.remotesRetry.IsZero() || time.Now().Before(s.remotesRetry)) {
+		return
+	}
+	s.remotesSig = stamp
+	fresh, err := s.Reload()
+	if err != nil || len(fresh) == 0 {
+		// Try the same files again after a pause rather than on every request.
+		s.remotesRetry = time.Now().Add(reloadRetryAfter)
+		if s.Log != nil {
+			fmt.Fprintf(s.Log, "sonarless-mcp: remotes changed but could not be reloaded (retrying in %s): %v\n", reloadRetryAfter, err)
+		}
+		return
+	}
+	s.remotesRetry = time.Time{}
+	next := append([]*Backend{s.local()}, fresh[1:]...)
+	s.backendsMu.Lock()
+	s.Backends = next
+	s.backendsMu.Unlock()
+	s.send(message{JSONRPC: "2.0", Method: "notifications/tools/list_changed"})
 }
 
 // touch records activity for the idle watcher, at most every 30s.
