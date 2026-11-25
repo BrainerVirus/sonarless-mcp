@@ -80,7 +80,11 @@ objects, one per line.`,
 				if dir == "" {
 					return errors.New("--dir needs a directory, e.g. --dir ~/.claude/skills")
 				}
-				dirs = []string{expandHome(e, dir)}
+				abs, err := filepath.Abs(expandHome(e, dir))
+				if err != nil {
+					return err
+				}
+				dirs = []string{abs}
 			} else {
 				for _, c := range clients.All() {
 					if d := c.SkillDir(e); d != "" && c.Detected != nil && c.Detected(e) {
@@ -120,7 +124,7 @@ objects, one per line.`,
 			if failed != nil {
 				return failed
 			}
-			fmt.Fprintf(errOut, "Installed the sonarless-mcp skill %s\n", version)
+			fmt.Fprintf(errOut, "Installed the sonarless-mcp skill %s; `sonarless-mcp skill list` shows every copy.\n", version)
 			return nil
 		},
 	}

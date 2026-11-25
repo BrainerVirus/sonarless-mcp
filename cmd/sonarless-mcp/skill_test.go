@@ -222,3 +222,22 @@ func TestSkillInstallUninstallPrint(t *testing.T) {
 		t.Error("user skill changed")
 	}
 }
+
+func TestSkillInstallRelativeDirPrintsAbsolutePath(t *testing.T) {
+	e := skillTestEnv(t)
+	t.Chdir(e.Home)
+	out, errOut, err := runSkill(t, "install", "--dir", filepath.Join("repo", "skills"))
+	want := filepath.Join(e.Home, "repo", "skills", "sonarless-mcp", "SKILL.md")
+	if real, rerr := filepath.EvalSymlinks(e.Home); rerr == nil && !strings.Contains(out, e.Home) {
+		want = filepath.Join(real, "repo", "skills", "sonarless-mcp", "SKILL.md")
+	}
+	if err != nil || strings.TrimSpace(out) != want {
+		t.Errorf("printed %q, want %q (%v)", out, want, err)
+	}
+	if !strings.Contains(errOut, "`sonarless-mcp skill list` shows every copy") {
+		t.Errorf("stderr = %q", errOut)
+	}
+	if reg, _ := clients.OpenSkillRegistry(e); len(reg.Dirs) != 1 || reg.Dirs[0] != filepath.Dir(filepath.Dir(want)) {
+		t.Errorf("recorded %v", reg.Dirs)
+	}
+}
