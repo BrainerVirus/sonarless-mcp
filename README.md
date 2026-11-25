@@ -246,6 +246,31 @@ skills (Claude Code, Cursor, opencode, Codex) — a short guide the agent loads
 when you ask about SonarQube or sonarless, kept current by updates and never
 written over a skill of yours with the same name.
 
+Each copy is stamped with the sonarless-mcp version that wrote it, and
+sonarless-mcp remembers where it installed them:
+
+```sh
+sonarless-mcp skill list            # each copy: dir, version, state, auto|manual (--json)
+sonarless-mcp skill sync            # rewrite the copies in your home dir at this version now
+sonarless-mcp skill sync --force    # also downgrade copies a newer sonarless-mcp wrote
+sonarless-mcp skill install --dir .claude/skills   # e.g. into a repository
+sonarless-mcp skill uninstall --dir .claude/skills
+sonarless-mcp skill print           # the SKILL.md this binary carries
+```
+
+A copy is `current` (this version), `stale` (older, or written before copies
+were stamped), `newer` (a newer sonarless-mcp wrote it; this one leaves it
+alone, `sonarless-mcp upgrade` catches up) or `missing` (deleted; `skill sync`
+forgets it, never re-creates it). Copies in your home directory update
+themselves (`auto`) the first time a newer release runs; a copy inside a git
+repository is `manual` and changes only with `skill install --dir` there.
+`skill install` without `--dir` installs into every detected client. The first
+run adopts copies earlier versions installed; the list lives in
+`skills.json` next to `config.env`.
+
+Usage errors name the flag you were probably after: `sonarless-mcp scan --tets`
+answers `did you mean --tests?`, and `--tests=12` says `--tests takes no value`.
+
 ## Remote SonarQube servers
 
 Next to the local server you can add any number of remote ones — typically your
