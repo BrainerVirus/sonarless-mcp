@@ -1,0 +1,94 @@
+{
+  "case": "scan-gate",
+  "model": "claude-haiku-4-5",
+  "key": "1-720448cfef2d07b9-b16468a5557b7e9e-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 5,
+      "tokens": {
+        "input": 44,
+        "output": 956,
+        "cacheCreation": 9307,
+        "cacheRead": 97534
+      },
+      "costUSD": 0.033191399999999996,
+      "durationMs": 12769,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "pwd"
+      ],
+      "calls": [
+        {
+          "tool": "sonarless_scan",
+          "exit": 0
+        },
+        {
+          "tool": "get_project_quality_gate_status",
+          "args": {
+            "projectKey": "demo-app",
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "**Quality gate: FAILED ❌**\n\nYour recent code changes caused the quality gate to fail. The scan identified two failing conditions:\n\n1. **New Coverage**: 41.2% \u003c 80% (required)\n2. **New Violations**: 3 \u003e 0 (required)\n\nYou have 3 new code quality violations and the test coverage for new code is below the 80% threshold. You'll need to address these issues to pass the quality gate."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 36,
+        "output": 749,
+        "cacheCreation": 8883,
+        "cacheRead": 75393
+      },
+      "costUSD": 0.0290863,
+      "durationMs": 11273,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "pwd"
+      ],
+      "calls": [
+        {
+          "tool": "sonarless_scan",
+          "exit": 0
+        }
+      ],
+      "answer": "**Quality gate FAILED** ❌\n\nThe analysis of your changes shows:\n\n- **New Coverage**: 41.2% (required: 80%)\n- **New Violations**: 3 issues (required: 0)\n\nYour recent code changes introduced 3 new violations and have insufficient test coverage. You'll need to either fix those violations or add more test coverage to bring the metrics within the quality gate thresholds.\n\nWould you like me to show you what those violations are?"
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 672,
+        "cacheCreation": 8673,
+        "cacheRead": 54049
+      },
+      "costUSD": 0.0261389,
+      "durationMs": 9821,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "sonarless_scan",
+          "exit": 0
+        }
+      ],
+      "answer": "**Quality gate status: ❌ FAILED**\n\nThe analysis found 2 failing conditions in the demo-app project:\n\n1. **New code coverage**: 41.2% (needs ≥80%)\n2. **New violations**: 3 issues found (needs 0)\n\nYour changes introduced 3 new code quality violations and have insufficient test coverage (41.2% vs. the required 80% for new code). You'll need to fix these issues before the quality gate can pass."
+    }
+  ]
+}

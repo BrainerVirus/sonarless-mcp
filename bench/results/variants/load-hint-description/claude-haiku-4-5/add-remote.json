@@ -1,0 +1,119 @@
+{
+  "case": "add-remote",
+  "model": "claude-haiku-4-5",
+  "key": "1-f190b737eb464324-b16468a5557b7e9e-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 3,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "forbid: puts the token in a command",
+      "failures": [
+        "forbid: puts the token in a command",
+        "answer",
+        "max turns"
+      ],
+      "turns": 7,
+      "tokens": {
+        "input": 52,
+        "output": 1364,
+        "cacheCreation": 10873,
+        "cacheRead": 121611
+      },
+      "costUSD": 0.040779100000000006,
+      "durationMs": 20554,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp status 2\u003e\u00261 | head -50",
+        "sonarless-mcp --help 2\u003e\u00261 | grep -A 20 \"remote\"",
+        "sonarless-mcp remote --help",
+        "sonarless-mcp remote add --help",
+        "SONARLESS_REMOTE_TOKEN=\"\u003ctoken\u003e\" sonarless-mcp remote add ci --url https://sonar.acme.example"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "status"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "--help"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "--help"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "add",
+            "--help"
+          ],
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "SONARLESS_REMOTE_TOKEN=\"\u003ctoken\u003e\" sonarless-mcp remote add ci --url https://sonar.acme.example"
+      ],
+      "answer": ""
+    },
+    {
+      "run": 2,
+      "status": "fail",
+      "failed": "forbid: puts the token in a command",
+      "failures": [
+        "forbid: puts the token in a command"
+      ],
+      "turns": 4,
+      "tokens": {
+        "input": 28,
+        "output": 1668,
+        "cacheCreation": 10753,
+        "cacheRead": 54443
+      },
+      "costUSD": 0.0353183,
+      "durationMs": 20439,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "SONAR_TOKEN=\"\u003ctoken\u003e\" sonarless-mcp remote add ci https://sonar.acme.example"
+      ],
+      "calls": null,
+      "denials": [
+        "SONAR_TOKEN=\"\u003ctoken\u003e\" sonarless-mcp remote add ci https://sonar.acme.example"
+      ],
+      "answer": "Thanks for providing that info! According to the sonarless-mcp documentation, tokens should never be passed through commands or chat. Instead, you'll need to run this command in your terminal, and you'll be prompted to enter the token interactively:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nWhen prompted, paste your token: `\u003ctoken\u003e`\n\nThis keeps the token secure and out of command histories. After you've added the remote, you can verify it with:\n\n```bash\nsonarless-mcp remote list\n```\n\nOnce configured, the remote will be available as `server: \"ci\"` in the MCP tools, so you can analyze CI results without exposing the token in chat."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 30,
+        "output": 1093,
+        "cacheCreation": 10393,
+        "cacheRead": 54195
+      },
+      "costUSD": 0.031700500000000006,
+      "durationMs": 15907,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": null,
+      "answer": "Got it! To add your CI SonarQube remote securely, **run this command in your terminal** (the token prompt will be hidden):\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nThis will prompt for your token interactively — paste `\u003ctoken\u003e` there. The token stays in your local sonarless config and never passes through chat.\n\nAfter that, you'll be able to query the remote server with `server: \"ci\"` in MCP tool calls, and use commands like `sonarless-mcp remote sync ci` to align your local rules with CI's."
+    }
+  ]
+}

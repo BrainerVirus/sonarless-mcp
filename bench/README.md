@@ -43,25 +43,34 @@ Run it from the repository root.
 Scrubbed transcripts of each run land in `bench/.transcripts/<model>/`
 (ignored by git) for debugging a failure.
 
-## Results so far (claude-haiku-4-5)
+## Results (claude-haiku-4-5)
 
-| Skill | Runs | Runs passed | Skill loaded | Mean input tokens/run | Cost |
-| --- | --- | --- | --- | --- | --- |
-| before the bench (5200 bytes) | 1 per case | 6/10 | 5/10 | 98,673 | $0.37 |
-| MCP-tools rule in the body (5501 bytes) | 1 per case | 9/10 | 7/10 | 118,957 | $0.38 |
-| the same rule also in the description (5453 bytes) | 3 per case | 15/30 | 3/30 | 105,013 | $1.06 |
-| no skill (`--no-skill` control) | 1 per case | 4/10 | n/a | 110,566 | $0.35 |
+| Skill | Runs | Runs passed | Cases passed | Skill loaded | Mean input tokens/run | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| before the bench (5200 bytes) | 1 per case | 6/10 | 6/10 | 5/10 | 98,673 | $0.37 |
+| MCP-tools rule in the body (5501 bytes) | 1 per case | 9/10 | 9/10 | 7/10 | 118,957 | $0.38 |
+| the same rule also in the description (5453 bytes) | 3 per case | 15/30 | 4/10 | 3/30 | 105,013 | $1.06 |
+| **shipped**: the rule at the top of the body, trimmed (5340 bytes) | 3 per case | 26/30 | 9/10 | 18/30 | 86,345 | $0.97 |
+| shipped + a "load it before the first tool" description (5542 bytes) | 3 per case | 14/30 | 4/10 | 3/30 | 95,184 | $0.97 |
+| no skill (`--no-skill` control) | 1 per case | 4/10 | 4/10 | n/a | 110,566 | $0.35 |
 
-What the skill adds is what it teaches once loaded: 9 of the 10 runs that
-loaded it passed, and the CLI-only cases (`upgrade-check`, `skill-list`) fail
-without it.
-Loading is the weak spot: a description that says results come from the MCP
-tools reads as enough on its own, and Haiku then skips the skill (3 loads in
-30 runs, close to the control). The description went back to the 9/10 one;
-the current skill (5340 bytes, the body rule kept at the top) still needs its
-own `--repeat 3` run. Results: `bench/results/baseline/`, `bench/results/`
-and `bench/results/no-skill/`; the committed `claude-haiku-4-5/` runs are the
-description variant's.
+`bench/results/claude-haiku-4-5/` holds the shipped skill's runs,
+`bench/results/baseline/claude-haiku-4-5/` the skill before the bench,
+`bench/results/no-skill/claude-haiku-4-5/` the control and
+`bench/results/variants/load-hint-description/` the rejected description.
+
+What the skill adds is what it teaches once loaded: the CLI-only cases
+(`upgrade-check`, `skill-list`) and `pass-ci-gate` pass when it loads and
+fail in the control. Loading is the
+weak spot, and the description decides it: both descriptions that tried to
+steer loading (results come from the MCP tools; load it before the first
+tool) cut loads to 3 in 30 runs, about the control's pass rate. Keep the
+description a plain list of what the skill covers and measure any change to
+it. `remote-offline` (1/3) still fails: Haiku answers from the MCP server
+instructions without loading the skill, and asks instead of falling back.
+
+`compare` against the baseline exits 1 for `file-issues` (1/1 before, 2/3
+now: a case still passes at two thirds); the baseline was a single run.
 
 ## What a run does
 
