@@ -52,7 +52,8 @@ func TestDefaultToolsetsKeepDocumentedTools(t *testing.T) {
 			t.Fatal(err)
 		}
 		for tool, ts := range upstreamHTTPTools {
-			if strings.Contains(string(b), tool) {
+			// The docs name the dropped tool to explain the default.
+			if ts != "dependency-risks" && strings.Contains(string(b), tool) {
 				named++
 				if !enabled[ts] {
 					t.Errorf("%s names %s, but its toolset %s is not in the default", f, tool, ts)
