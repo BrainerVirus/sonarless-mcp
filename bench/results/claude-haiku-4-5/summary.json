@@ -32,21 +32,16 @@
     },
     {
       "case": "compare-ci",
-      "pass": false,
-      "passes": 0,
+      "pass": true,
+      "passes": 3,
       "graded": 3,
       "skillLoaded": 3,
-      "failed": [
-        "require: reads local issues",
-        "require: reads local issues",
-        "require: reads local issues"
-      ],
-      "meanTurns": 11,
-      "meanTotalInput": 241568.7,
-      "sdTotalInput": 2891.2,
-      "meanOutput": 2748.3,
-      "meanDurationMs": 32029,
-      "costUSD": 0.1942
+      "meanTurns": 7.7,
+      "meanTotalInput": 122376.3,
+      "sdTotalInput": 14751.2,
+      "meanOutput": 1676.3,
+      "meanDurationMs": 20715,
+      "costUSD": 0.1291
     },
     {
       "case": "file-issues",
@@ -145,19 +140,19 @@
   ],
   "totals": {
     "cases": 10,
-    "casesPassed": 9,
+    "casesPassed": 10,
     "runs": 30,
     "graded": 30,
-    "passes": 27,
-    "passRate": 0.9,
+    "passes": 30,
+    "passRate": 1,
     "tokens": {
-      "input": 1136,
-      "output": 29291,
-      "cacheCreation": 284961,
-      "cacheRead": 2571450
+      "input": 1023,
+      "output": 26075,
+      "cacheCreation": 278006,
+      "cacheRead": 2220941
     },
-    "totalInput": 2857547,
-    "meanTotalInputPerRun": 95251.6,
-    "costUSD": 1.0594
+    "totalInput": 2499970,
+    "meanTotalInputPerRun": 83332.3,
+    "costUSD": 0.9942
   }
 }

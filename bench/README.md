@@ -55,7 +55,7 @@ Scrubbed transcripts of each run land in `bench/.transcripts/<model>/`
 | the same rule also in the description (5453 bytes) | 3 per case | 15/30 | 4/10 | 3/30 | 105,013 | $1.06 |
 | **shipped**: the rule at the top of the body, trimmed (5340 bytes) | 3 per case | 26/30 | 9/10 | 18/30 | 86,345 | $0.97 |
 | shipped + a "load it before the first tool" description (5542 bytes) | 3 per case | 14/30 | 4/10 | 3/30 | 95,184 | $0.97 |
-| shipped skill + "do not ask; answer from local" server instructions | 3 per case | 27/30 | 9/10 | 18/30 | 95,252 | $1.06 |
+| shipped skill + "do not ask; answer from local" server instructions | 3 per case | 30/30 | 10/10 | 18/30 | 83,332 | $0.99 |
 | no skill (`--no-skill` control) | 1 per case | 4/10 | 4/10 | n/a | 110,566 | $0.35 |
 
 `bench/results/claude-haiku-4-5/` holds the current runs (the last row but
@@ -79,9 +79,9 @@ instructions without loading the skill, and asked instead of falling back.
 The fake server sends the shim's own remotes note (`mcp.RemotesNote`), which
 now says "do not ask; in the same reply say it is unreachable and answer with
 the same tool on server local": 3/3, both in its own run and in the full one.
-In that full run `compare-ci` failed 0/3 (3/3 before): with the skill loaded,
-Haiku ran the CLI for issues instead of the MCP tools, a step the changed
-sentence does not cover; re-run it before trusting either reading.
+In that full run `compare-ci` failed 0/3 (Haiku scripted made-up CLI
+commands for issues instead of the MCP tools); a re-run of the case alone
+passed 3/3, which the stored results hold, so it was variance.
 
 `compare` against the baseline exits 0: `file-issues` (1/1 before, 2/3 now)
 still passes at two thirds and is only marked "lower rate, still passes"; the

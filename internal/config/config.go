@@ -24,6 +24,8 @@ type Key struct {
 	Default string
 	Project bool // settable from a project's .sonarless.env
 	Help    string
+	// HelpDefault, when set, stands for Default in --help (a long value).
+	HelpDefault string
 }
 
 // Setting names.
@@ -73,7 +75,8 @@ var Keys = []Key{
 	{Name: MCPPort, Default: "9235", Help: "host port for the shared MCP server (127.0.0.1)"},
 	{Name: GatewayPort, Default: "9233", Help: "host port of the gateway AI clients connect to directly over HTTP (127.0.0.1)"},
 	{Name: MCPImage, Default: "sonarsource/sonarqube-mcp:latest", Help: "SonarQube MCP server image"},
-	{Name: MCPToolsets, Default: DefaultMCPToolsets, Help: "comma-separated MCP toolsets to enable; default (or empty) leaves the choice to the MCP server, which adds dependency-risks (SonarQube Enterprise only)"},
+	{Name: MCPToolsets, Default: DefaultMCPToolsets, HelpDefault: "the MCP server's own minus dependency-risks; see docs/configuration.md",
+		Help: "comma-separated toolset names the MCP server enables; default hands the choice to the MCP server"},
 	{Name: MCPReadOnly, Default: "false", Help: "disable MCP write tools"},
 	{Name: MCPJavaOpts, Default: "-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k", Help: "JVM options of the shared MCP server (JAVA_TOOL_OPTIONS); a small heap and C1-only JIT keep it near 200 MiB; none leaves the JVM defaults"},
 	{Name: IdleTimeoutKey, Default: "30m", Help: "stop server+MCP after this long unused; 0 disables"},
@@ -114,7 +117,10 @@ func EnvHelp() string {
 		".sonarless.env; `sonarless-mcp config` shows the effective values.\n")
 	for _, k := range Keys {
 		line := "  " + k.Name + "\n      " + k.Help
-		if k.Default != "" {
+		switch {
+		case k.HelpDefault != "":
+			line += " (default: " + k.HelpDefault + ")"
+		case k.Default != "":
 			line += " (default: " + k.Default + ")"
 		}
 		if k.Project {

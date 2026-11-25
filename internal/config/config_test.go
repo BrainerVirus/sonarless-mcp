@@ -157,3 +157,16 @@ func TestMCPJavaOpts(t *testing.T) {
 		t.Errorf("none = %q", c.Get(MCPJavaOpts))
 	}
 }
+
+// The toolsets help must not read as an issues command to an agent that
+// greps --help for "issue": the default list stays in the docs.
+func TestToolsetsHelpOmitsTheList(t *testing.T) {
+	for _, line := range strings.Split(EnvHelp(), "\n") {
+		if strings.Contains(strings.ToLower(line), "issue") {
+			t.Errorf("--help line mentions issues: %q", line)
+		}
+	}
+	if !strings.Contains(EnvHelp(), MCPToolsets) {
+		t.Errorf("%s missing from --help", MCPToolsets)
+	}
+}
