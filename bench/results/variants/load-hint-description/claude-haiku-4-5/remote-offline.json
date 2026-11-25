@@ -1,0 +1,115 @@
+{
+  "case": "remote-offline",
+  "model": "claude-haiku-4-5",
+  "key": "1-9d0d1bc9cd991377-b16468a5557b7e9e-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 3,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 5,
+      "tokens": {
+        "input": 44,
+        "output": 796,
+        "cacheCreation": 9112,
+        "cacheRead": 96462
+      },
+      "costUSD": 0.0318942,
+      "durationMs": 12293,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "mcp__sonarqube__search_security_hotspots --server work",
+        "mcp call mcp__sonarqube__search_security_hotspots -- --server work"
+      ],
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "denials": [
+        "mcp__sonarqube__search_security_hotspots --server work",
+        "mcp call mcp__sonarqube__search_security_hotspots -- --server work"
+      ],
+      "answer": "The remote SonarQube instance (CI server at http://sonar.example.com) is currently unreachable. This could be due to network connectivity or VPN issues.\n\nWould you like me to check the security hotspots from your local SonarQube scan instead? I can run a fresh scan of your working copy if needed."
+    },
+    {
+      "run": 2,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 607,
+        "cacheCreation": 8373,
+        "cacheRead": 53711
+      },
+      "costUSD": 0.0251801,
+      "durationMs": 8867,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "answer": "The remote CI SonarQube at http://sonar.example.com is unreachable (network timeout). This could be due to VPN not being connected or the server being offline.\n\nWould you like me to:\n1. Check the **local SonarQube** (scanned from your working copy) instead, or\n2. Try again after you've verified your VPN/network connection?"
+    },
+    {
+      "run": 3,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 5,
+      "tokens": {
+        "input": 46,
+        "output": 907,
+        "cacheCreation": 9185,
+        "cacheRead": 96647
+      },
+      "costUSD": 0.0326157,
+      "durationMs": 12466,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "command -v sonarless-mcp"
+      ],
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "denials": [
+        "command -v sonarless-mcp"
+      ],
+      "answer": "The CI SonarQube server at http://sonar.example.com is currently unreachable (connection timeout). This could be due to a VPN connection issue or the server being offline.\n\nWould you like me to:\n1. Check the **local** SonarQube instance instead (scanned from your working copy)?\n2. Wait and retry the remote server?\n3. Both?\n\nLet me know how you'd like to proceed."
+    }
+  ]
+}

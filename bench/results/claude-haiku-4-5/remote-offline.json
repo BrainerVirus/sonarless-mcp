@@ -1,0 +1,106 @@
+{
+  "case": "remote-offline",
+  "model": "claude-haiku-4-5",
+  "key": "1-9d0d1bc9cd991377-08d02c6a1127a519-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 3,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 36,
+        "output": 919,
+        "cacheCreation": 8910,
+        "cacheRead": 75267
+      },
+      "costUSD": 0.029977700000000003,
+      "durationMs": 12436,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        },
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "local"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "The CI SonarQube server at http://sonar.example.com is currently unreachable (likely offline or VPN not connected).\n\nHowever, the **local SonarQube scan** found **1 security hotspot**:\n\n| Issue | Location | Category | Severity |\n|-------|----------|----------|----------|\n| H1 | `src/payment.ts:3` | Weak Cryptography | Medium |\n\nThis suggests the remote server would likely report the same or similar findings. When the CI server comes back online, you can run the query again to compare results. Would you like me to investigate the weak cryptography issue in payment.ts?"
+    },
+    {
+      "run": 2,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 605,
+        "cacheCreation": 8523,
+        "cacheRead": 53958
+      },
+      "costUSD": 0.0254948,
+      "durationMs": 9176,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "answer": "The remote CI SonarQube server at http://sonar.example.com is currently unreachable (connection timeout). This could be due to a VPN issue or the server being offline.\n\nWould you like me to check the **local** SonarQube instead to see security hotspots in your current working copy? Or if you need the CI results specifically, you may need to check your VPN connection or verify the remote server is online."
+    },
+    {
+      "run": 3,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 783,
+        "cacheCreation": 8688,
+        "cacheRead": 54134
+      },
+      "costUSD": 0.0267324,
+      "durationMs": 11528,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "answer": "The CI SonarQube server at http://sonar.example.com is currently unreachable (connection timeout). This could mean the VPN isn't connected or the remote server is offline.\n\nWould you like me to check the local SonarQube instance instead, which scans your current working copy? Or if you have VPN access or know why CI is offline, let me know and I can try again."
+    }
+  ]
+}

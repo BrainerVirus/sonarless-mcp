@@ -1,0 +1,92 @@
+{
+  "case": "ci-gate",
+  "model": "claude-haiku-4-5",
+  "key": "1-779405865eca99d4-08d02c6a1127a519-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 779,
+        "cacheCreation": 8718,
+        "cacheRead": 54148
+      },
+      "costUSD": 0.0267738,
+      "durationMs": 11499,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "get_project_quality_gate_status",
+          "args": {
+            "server": "work"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "No, the quality gate is **failing** on the CI SonarQube server. \n\n**Status:** ERROR\n\n**Failing condition:**\n- **Metric:** New Reliability Rating\n- **Actual value:** 3 (C rating)\n- **Required:** 1 (A rating)\n\nThe project has reliability issues that need to be addressed to pass the quality gate."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 777,
+        "cacheCreation": 8756,
+        "cacheRead": 54174
+      },
+      "costUSD": 0.0268424,
+      "durationMs": 10815,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "get_project_quality_gate_status",
+          "args": {
+            "projectKey": "demo-app",
+            "server": "work"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "No, the quality gate is **failing** on your CI SonarQube server. \n\nThe issue is with the **new_reliability_rating** metric: it's currently at **3** (a reliability rating of D/E), but the quality gate requires it to be **1 or better** (A rating). This is preventing the quality gate from passing.\n\nWould you like me to check what specific reliability issues are causing this, or run a local scan to compare?"
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 692,
+        "cacheCreation": 8694,
+        "cacheRead": 54118
+      },
+      "costUSD": 0.0262878,
+      "durationMs": 10065,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "get_project_quality_gate_status",
+          "args": {
+            "server": "work"
+          },
+          "exit": 0
+        }
+      ],
+      "answer": "No, the quality gate is **not passing** on your CI SonarQube server. It shows an **ERROR** status with one failing condition:\n\n- **new_reliability_rating**: Currently at 3, but must be ≤ 1 to pass\n\nThis indicates there are reliability issues in newly added or modified code that exceed the quality gate threshold."
+    }
+  ]
+}

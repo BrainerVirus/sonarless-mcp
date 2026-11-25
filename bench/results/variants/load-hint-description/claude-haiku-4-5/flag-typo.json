@@ -1,0 +1,121 @@
+{
+  "case": "flag-typo",
+  "model": "claude-haiku-4-5",
+  "key": "1-496b3f70e6018569-b16468a5557b7e9e-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 26,
+        "output": 493,
+        "cacheCreation": 8160,
+        "cacheRead": 53479
+      },
+      "costUSD": 0.024158900000000004,
+      "durationMs": 7550,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp scan --fail-on-gates",
+        "sonarless-mcp scan --fail-on-gate"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gates"
+          ],
+          "exit": 1
+        },
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gate"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "The scan passed successfully. Exit status **0** indicates the quality gate **PASSED**. \n\nThe analysis completed in 48 seconds. Since the quality gate passed and the `--fail-on-gate` flag was set, the command exited with 0 (success). If the gate had failed, the exit status would have been non-zero to signal the failure."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 26,
+        "output": 501,
+        "cacheCreation": 8208,
+        "cacheRead": 53520
+      },
+      "costUSD": 0.024299,
+      "durationMs": 7315,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp scan --fail-on-gates",
+        "sonarless-mcp scan --fail-on-gate"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gates"
+          ],
+          "exit": 1
+        },
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gate"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "The quality gate **PASSED**. Exit status is 0, indicating the project meets all quality gate criteria.\n\nThe scan completed in 48 seconds for the demo-app project. You can view the full dashboard at http://localhost:9234/dashboard?id=demo-app."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 26,
+        "output": 370,
+        "cacheCreation": 8135,
+        "cacheRead": 53478
+      },
+      "costUSD": 0.023493800000000002,
+      "durationMs": 6270,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp scan --fail-on-gates",
+        "sonarless-mcp scan --fail-on-gate"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gates"
+          ],
+          "exit": 1
+        },
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gate"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "The quality gate **PASSED**. The exit status (0) indicates the project meets all quality gate requirements. The scan completed in 48 seconds with the local SonarQube scanner for the demo-app project."
+    }
+  ]
+}

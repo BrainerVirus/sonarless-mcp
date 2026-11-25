@@ -1,0 +1,67 @@
+{
+  "case": "add-remote",
+  "model": "claude-haiku-4-5",
+  "key": "1-f190b737eb464324-08d02c6a1127a519-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 20,
+        "output": 761,
+        "cacheCreation": 9696,
+        "cacheRead": 33062
+      },
+      "costUSD": 0.0265232,
+      "durationMs": 10268,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": null,
+      "answer": "Got it. Per the skill documentation, tokens should never go through chat or commands—they go through a hidden prompt instead. Run this in your terminal:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nIt will prompt you for the token interactively. Paste your token when prompted and it won't be echoed to the screen."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 20,
+        "output": 609,
+        "cacheCreation": 9590,
+        "cacheRead": 33060
+      },
+      "costUSD": 0.025550999999999997,
+      "durationMs": 8322,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": null,
+      "answer": "I can't pass the token through a command or tool call—that would log it. Instead, please run this in your terminal:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nYou'll be prompted to enter your token (it won't be echoed on screen). After you add it, the remote will be available to use with the SonarQube MCP tools via `server: \"ci\"`."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 20,
+        "output": 779,
+        "cacheCreation": 9702,
+        "cacheRead": 33060
+      },
+      "costUSD": 0.026625,
+      "durationMs": 10569,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": null,
+      "answer": "I see—tokens shouldn't go through the chat. Please run this command in your terminal, and you'll be prompted to enter your token interactively:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nIt will prompt you for your SonarQube token (make sure it's a **User token**, starting with `squ_`). Once added, the remote will be available for `sonarless-mcp` commands and the SonarQube MCP tools.\n\nAfter adding it, you can verify with:\n```bash\nsonarless-mcp remote list\n```"
+    }
+  ]
+}

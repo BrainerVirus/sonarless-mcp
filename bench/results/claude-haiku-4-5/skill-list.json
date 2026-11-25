@@ -1,0 +1,113 @@
+{
+  "case": "skill-list",
+  "model": "claude-haiku-4-5",
+  "key": "1-0409cffd93de058c-08d02c6a1127a519-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 5,
+      "tokens": {
+        "input": 27,
+        "output": 820,
+        "cacheCreation": 10001,
+        "cacheRead": 55162
+      },
+      "costUSD": 0.0296452,
+      "durationMs": 10709,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp skill list",
+        "sonarless-mcp upgrade --check"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "skill",
+            "list"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "upgrade",
+            "--check"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "**Skill copies status:**\n- `~/.claude/skills` — **v0.14.2** (current, up to date)\n- `~/.config/opencode/skills` — **v0.12.0** (stale — needs syncing)\n\n**Newer release available:**\n- **v0.15.0** is out; v0.14.2 is currently installed\n\nThere's one stale skill copy in `~/.config/opencode/skills` that's behind, and a newer release (v0.15.0) is available. No changes made per your request."
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 27,
+        "output": 616,
+        "cacheCreation": 9817,
+        "cacheRead": 55185
+      },
+      "costUSD": 0.0282595,
+      "durationMs": 9053,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp skill list"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "skill",
+            "list"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "You have a **stale copy** that needs updating:\n\n- **~/.claude/skills** — v0.14.2 ✓ current\n- **~/.config/opencode/skills** — v0.12.0 ✗ stale (2 versions behind)\n\nBoth are set to auto-update, but the second one hasn't synced yet. You can update it anytime with `sonarless-mcp skill sync`."
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 5,
+      "tokens": {
+        "input": 28,
+        "output": 1095,
+        "cacheCreation": 10275,
+        "cacheRead": 55311
+      },
+      "costUSD": 0.0315841,
+      "durationMs": 12839,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp upgrade --check",
+        "sonarless-mcp skill list"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "upgrade",
+            "--check"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "skill",
+            "list"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "**Status: Not fully up to date**\n\nThere are outdated copies:\n\n1. **Main binary**: v0.14.2 installed → v0.15.0 available\n2. **Skill copies**:\n   - `~/.claude/skills` — v0.14.2 (current) ✓\n   - `~/.config/opencode/skills` — v0.12.0 (stale) ✗\n\nTo update everything, you'd run:\n- `sonarless-mcp upgrade` (updates the binary and ~/.claude/skills automatically)\n- `sonarless-mcp skill sync` (updates stale copies in ~/.config/opencode/skills)"
+    }
+  ]
+}

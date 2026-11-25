@@ -1,0 +1,171 @@
+{
+  "model": "claude-haiku-4-5",
+  "skillHash": "562c45df68291c94",
+  "skillBytes": 5200,
+  "cases": [
+    {
+      "case": "add-remote",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "skillLoaded": 1,
+      "meanTurns": 3,
+      "meanTotalInput": 42653,
+      "sdTotalInput": 0,
+      "meanOutput": 670,
+      "meanDurationMs": 10074,
+      "costUSD": 0.0258
+    },
+    {
+      "case": "ci-gate",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "meanTurns": 3,
+      "meanTotalInput": 62820,
+      "sdTotalInput": 0,
+      "meanOutput": 751,
+      "meanDurationMs": 11621,
+      "costUSD": 0.0265
+    },
+    {
+      "case": "compare-ci",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "skillLoaded": 1,
+      "failed": [
+        "require: reads local issues"
+      ],
+      "meanTurns": 11,
+      "meanTotalInput": 238348,
+      "sdTotalInput": 0,
+      "meanOutput": 2016,
+      "meanDurationMs": 24909,
+      "costUSD": 0.083
+    },
+    {
+      "case": "file-issues",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "meanTurns": 3,
+      "meanTotalInput": 63594,
+      "sdTotalInput": 0,
+      "meanOutput": 842,
+      "meanDurationMs": 10446,
+      "costUSD": 0.028
+    },
+    {
+      "case": "flag-typo",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "meanTurns": 3,
+      "meanTotalInput": 62051,
+      "sdTotalInput": 0,
+      "meanOutput": 428,
+      "meanDurationMs": 6663,
+      "costUSD": 0.0241
+    },
+    {
+      "case": "pass-ci-gate",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "skillLoaded": 1,
+      "failed": [
+        "require: syncs CI's gate and rules"
+      ],
+      "meanTurns": 10,
+      "meanTotalInput": 211146,
+      "sdTotalInput": 0,
+      "meanOutput": 1868,
+      "meanDurationMs": 23419,
+      "costUSD": 0.0544
+    },
+    {
+      "case": "remote-offline",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "require: falls back to local"
+      ],
+      "meanTurns": 3,
+      "meanTotalInput": 62598,
+      "sdTotalInput": 0,
+      "meanOutput": 652,
+      "meanDurationMs": 9994,
+      "costUSD": 0.0258
+    },
+    {
+      "case": "scan-gate",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "skillLoaded": 1,
+      "meanTurns": 5,
+      "meanTotalInput": 89421,
+      "sdTotalInput": 0,
+      "meanOutput": 1141,
+      "meanDurationMs": 15083,
+      "costUSD": 0.0352
+    },
+    {
+      "case": "skill-list",
+      "pass": true,
+      "passes": 1,
+      "graded": 1,
+      "skillLoaded": 1,
+      "meanTurns": 6,
+      "meanTotalInput": 112461,
+      "sdTotalInput": 0,
+      "meanOutput": 1478,
+      "meanDurationMs": 18870,
+      "costUSD": 0.0393
+    },
+    {
+      "case": "upgrade-check",
+      "pass": false,
+      "passes": 0,
+      "graded": 1,
+      "notLoaded": 1,
+      "skillLoaded": 0,
+      "failed": [
+        "require: checks for a release"
+      ],
+      "meanTurns": 3,
+      "meanTotalInput": 41640,
+      "sdTotalInput": 0,
+      "meanOutput": 666,
+      "meanDurationMs": 8440,
+      "costUSD": 0.0238
+    }
+  ],
+  "totals": {
+    "cases": 10,
+    "casesPassed": 6,
+    "runs": 10,
+    "graded": 10,
+    "passes": 6,
+    "passRate": 0.6,
+    "tokens": {
+      "input": 396,
+      "output": 10512,
+      "cacheCreation": 112800,
+      "cacheRead": 873536
+    },
+    "totalInput": 986732,
+    "meanTotalInputPerRun": 98673.2,
+    "costUSD": 0.3659
+  }
+}

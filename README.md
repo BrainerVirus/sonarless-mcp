@@ -140,6 +140,9 @@ Conventional Commits drive fully automated releases (semantic-release +
 GoReleaser); see [AGENTS.md](AGENTS.md) for layout, testing rules and the
 release flow.
 
+The agent skill is measured on a small model with a local bench
+(`go run ./bench`, never in CI); see [bench/README.md](bench/README.md).
+
 ## Security
 
 Report vulnerabilities privately, never in a public issue: see

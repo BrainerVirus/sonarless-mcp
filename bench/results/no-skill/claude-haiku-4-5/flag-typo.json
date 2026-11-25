@@ -1,0 +1,47 @@
+{
+  "case": "flag-typo",
+  "model": "claude-haiku-4-5",
+  "key": "1-496b3f70e6018569-none-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 26,
+        "output": 346,
+        "cacheCreation": 8119,
+        "cacheRead": 53444
+      },
+      "costUSD": 0.023338400000000002,
+      "durationMs": 6130,
+      "skillLoaded": false,
+      "skillListed": false,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp scan --fail-on-gates",
+        "sonarless-mcp scan --fail-on-gate"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gates"
+          ],
+          "exit": 1
+        },
+        {
+          "argv": [
+            "scan",
+            "--fail-on-gate"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "The quality gate **PASSED**. The exit status is 0 (success), which indicates that the project meets all defined quality gate criteria."
+    }
+  ]
+}

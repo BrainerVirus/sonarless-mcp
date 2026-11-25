@@ -1,0 +1,34 @@
+{
+  "id": "upgrade-check",
+  "about": "sonarless-mcp upgrade --check, never a real upgrade",
+  "prompt": "Is there a newer sonarless-mcp release than the one I have? Don't install anything.",
+  "maxTurns": 6,
+  "files": {
+    "sonar-project.properties": "sonar.projectKey=demo-app\nsonar.projectName=Demo App\nsonar.sources=src\n",
+    "package.json": "{\n  \"name\": \"demo-app\",\n  \"version\": \"1.4.0\",\n  \"scripts\": {\"test\": \"vitest run\"}\n}\n",
+    "src/payment.ts": "export function charge(amount: number): number {\n  let fee = 0;\n  fee = amount * 0.02;\n  const unused = amount;\n  return amount + fee;\n}\n",
+    "src/app.ts": "import { charge } from './payment';\n\nconsole.log(charge(100));\n"
+  },
+  "require": [
+    {
+      "name": "checks for a release",
+      "match": [
+        "^sonarless-mcp (upgrade|update) .*--check"
+      ]
+    }
+  ],
+  "forbid": [
+    {
+      "name": "upgrades",
+      "match": [
+        "^sonarless-mcp (upgrade|update)( |$)"
+      ],
+      "not": [
+        "--check",
+        "--help",
+        "-h( |$)"
+      ]
+    }
+  ],
+  "answer": "0\\.15\\.0"
+}

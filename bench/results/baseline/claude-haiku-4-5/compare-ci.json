@@ -1,0 +1,80 @@
+{
+  "case": "compare-ci",
+  "model": "claude-haiku-4-5",
+  "key": "1-a5585e58582603c7-562c45df68291c94-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 1,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: reads local issues",
+      "failures": [
+        "require: reads local issues",
+        "require: reads CI issues",
+        "answer",
+        "max turns"
+      ],
+      "turns": 11,
+      "tokens": {
+        "input": 86,
+        "output": 2016,
+        "cacheCreation": 25809,
+        "cacheRead": 212453
+      },
+      "costUSD": 0.0830293,
+      "durationMs": 24909,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp status",
+        "sonarless-mcp scan",
+        "sonarless-mcp project",
+        "cat \u003e /tmp/compare_issues.py \u003c\u003c 'EOF'\nimport subprocess\nimport json\nimport sys\n\ndef get_issues(server):\n    \"\"\"Fetch all issues from a server using sonarless-mcp\"\"\"\n    cmd = [\"sonarless-mcp\", \"issues\", \"--project\", \"demo-app\", \"--server\", server, \"--json\"]\n    try:\n        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)\n        if result.returncode == 0:\n            # Try to parse as JSON\n            try:\n                return json.loads(result.stdout)\n            except json.JSONDecodeError:\n                # Return raw output if not JSON\n                return result.stdout\n        else:\n            print(f\"Error fetching issues from {server}: {result.stderr}\", file=sys.stderr)\n            return None\n    except Exception as e:\n        print(f\"Exception fetching issues from {server}: {e}\", file=sys.stderr)\n        return None\n\n# Fetch from both servers\nlocal_issues = get_issues(\"local\")\nremote_issues = get_issues(\"work\")\n\nprint(\"=== LOCAL ISSUES ===\")\nprint(json.dumps(local_issues, indent=2) if isinstance(local_issues, dict) else local_issues)\nprint(\"\\n=== REMOTE (CI) ISSUES ===\")\nprint(json.dumps(remote_issues, indent=2) if isinstance(remote_issues, dict) else remote_issues)\nEOF\npython3 /tmp/compare_issues.py\n",
+        "sonarless-mcp issues --project demo-app --server local --json 2\u003e/dev/null | head -100",
+        "curl -s http://localhost:9234/api/issues/search?projects=demo-app 2\u003e/dev/null | python3 -m json.tool | head -150",
+        "which sonarless-mcp",
+        "\u003cworld\u003e/harness/bin/sonarless-mcp issues --help 2\u003e\u00261 || true"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "status"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "scan"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "project"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "issues",
+            "--project",
+            "demo-app",
+            "--server",
+            "local",
+            "--json"
+          ],
+          "exit": 1
+        }
+      ],
+      "denials": [
+        "cat \u003e /tmp/compare_issues.py \u003c\u003c 'EOF'\nimport subprocess\nimport json\nimport sys\n\ndef get_issues(server):\n    \"\"\"Fetch all issues from a server using sonarless-mcp\"\"\"\n    cmd = [\"sonarless-mcp\", \"issues\", \"--project\", \"demo-app\", \"--server\", server, \"--json\"]\n    try:\n        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)\n        if result.returncode == 0:\n            # Try to parse as JSON\n            try:\n                return json.loads(result.stdout)\n            except json.JSONDecodeError:\n                # Return raw output if not JSON\n                return result.stdout\n        else:\n            print(f\"Error fetching issues from {server}: {result.stderr}\", file=sys.stderr)\n            return None\n    except Exception as e:\n        print(f\"Exception fetching issues from {server}: {e}\", file=sys.stderr)\n        return None\n\n# Fetch from both servers\nlocal_issues = get_issues(\"local\")\nremote_issues = get_issues(\"work\")\n\nprint(\"=== LOCAL ISSUES ===\")\nprint(json.dumps(local_issues, indent=2) if isinstance(local_issues, dict) else local_issues)\nprint(\"\\n=== REMOTE (CI) ISSUES ===\")\nprint(json.dumps(remote_issues, indent=2) if isinstance(remote_issues, dict) else remote_issues)\nEOF\npython3 /tmp/compare_issues.py\n",
+        "curl -s http://localhost:9234/api/issues/search?projects=demo-app 2\u003e/dev/null | python3 -m json.tool | head -150",
+        "\u003cworld\u003e/harness/bin/sonarless-mcp issues --help 2\u003e\u00261 || true"
+      ],
+      "answer": ""
+    }
+  ]
+}

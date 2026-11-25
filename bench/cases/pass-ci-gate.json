@@ -1,0 +1,48 @@
+{
+  "id": "pass-ci-gate",
+  "about": "will it pass CI's gate: remote sync, then a local scan",
+  "prompt": "Will my current working copy pass CI's quality gate? Judge it with CI's rules, not the local defaults.",
+  "maxTurns": 10,
+  "files": {
+    "sonar-project.properties": "sonar.projectKey=demo-app\nsonar.projectName=Demo App\nsonar.sources=src\n",
+    "package.json": "{\n  \"name\": \"demo-app\",\n  \"version\": \"1.4.0\",\n  \"scripts\": {\"test\": \"vitest run\"}\n}\n",
+    "src/payment.ts": "export function charge(amount: number): number {\n  let fee = 0;\n  fee = amount * 0.02;\n  const unused = amount;\n  return amount + fee;\n}\n",
+    "src/app.ts": "import { charge } from './payment';\n\nconsole.log(charge(100));\n"
+  },
+  "fixtures": {
+    "rules": [
+      {
+        "match": "^mcp sonarless_scan",
+        "stdout": "Scan finished in 61s. Quality gate (CI way): PASSED (project demo-app)."
+      },
+      {
+        "match": "^sonarless-mcp scan",
+        "stdout": "Analysis done in 61s.\nQuality gate (CI way): PASSED\n"
+      }
+    ]
+  },
+  "require": [
+    {
+      "name": "syncs CI's gate and rules",
+      "match": [
+        "^(mcp sonarless_remote_sync .*\"remote\":\"work\"|sonarless-mcp remote sync work)"
+      ]
+    },
+    {
+      "name": "syncs before scanning",
+      "match": [
+        "^(mcp sonarless_remote_sync|sonarless-mcp remote sync)( |$)"
+      ],
+      "before": [
+        "^(mcp sonarless_scan|sonarless-mcp scan)( |$)"
+      ]
+    },
+    {
+      "name": "scans after the sync",
+      "match": [
+        "^(mcp sonarless_scan|sonarless-mcp scan)( |$)"
+      ]
+    }
+  ],
+  "answer": "pass"
+}

@@ -1,0 +1,29 @@
+{
+  "case": "add-remote",
+  "model": "claude-haiku-4-5",
+  "key": "1-f190b737eb464324-562c45df68291c94-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 3,
+      "tokens": {
+        "input": 20,
+        "output": 670,
+        "cacheCreation": 9544,
+        "cacheRead": 33089
+      },
+      "costUSD": 0.025766900000000002,
+      "durationMs": 10074,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": null,
+      "answer": "I appreciate you providing the details, but for security, tokens should **not** go through chat. Instead, run this command in your terminal and enter the token at the hidden prompt:\n\n```bash\nsonarless-mcp remote add ci --url https://sonar.acme.example\n```\n\nIt will prompt you for the token interactively — paste your token there. That way the token stays out of chat history and environment variables.\n\nOnce you've run that, the `ci` remote will be available to all MCP tools with `server: \"ci\"`, and you can compare local scan results against what CI found."
+    }
+  ]
+}

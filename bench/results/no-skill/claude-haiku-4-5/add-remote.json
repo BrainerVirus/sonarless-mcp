@@ -1,0 +1,71 @@
+{
+  "case": "add-remote",
+  "model": "claude-haiku-4-5",
+  "key": "1-f190b737eb464324-none-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 1,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "answer",
+      "failures": [
+        "answer",
+        "max turns"
+      ],
+      "turns": 7,
+      "tokens": {
+        "input": 52,
+        "output": 1650,
+        "cacheCreation": 12153,
+        "cacheRead": 124595
+      },
+      "costUSD": 0.0450675,
+      "durationMs": 21705,
+      "skillLoaded": false,
+      "skillListed": false,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp status",
+        "sonarless-mcp --help",
+        "sonarless-mcp remote --help",
+        "sonarless-mcp remote add --help",
+        "SONARLESS_REMOTE_TOKEN=\"\u003ctoken\u003e\" sonarless-mcp remote add ci --url https://sonar.acme.example"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "status"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "--help"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "--help"
+          ],
+          "exit": 0
+        },
+        {
+          "argv": [
+            "remote",
+            "add",
+            "--help"
+          ],
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "SONARLESS_REMOTE_TOKEN=\"\u003ctoken\u003e\" sonarless-mcp remote add ci --url https://sonar.acme.example"
+      ],
+      "answer": ""
+    }
+  ]
+}

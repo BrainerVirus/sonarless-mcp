@@ -1,0 +1,43 @@
+{
+  "case": "scan-gate",
+  "model": "claude-haiku-4-5",
+  "key": "1-720448cfef2d07b9-none-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 5,
+      "tokens": {
+        "input": 36,
+        "output": 997,
+        "cacheCreation": 9313,
+        "cacheRead": 75564
+      },
+      "costUSD": 0.031203400000000003,
+      "durationMs": 13038,
+      "skillLoaded": false,
+      "skillListed": false,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp scan",
+        "cat sonar-project.properties 2\u003e/dev/null | grep sonar.projectKey",
+        "mcp-sonarqube get_project_quality_gate_status --projectKey demo-app --server local 2\u003e\u00261 || echo \"Tool call format may differ, checking status directly...\""
+      ],
+      "calls": [
+        {
+          "argv": [
+            "scan"
+          ],
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "mcp-sonarqube get_project_quality_gate_status --projectKey demo-app --server local 2\u003e\u00261 || echo \"Tool call format may differ, checking status directly...\""
+      ],
+      "answer": "**The quality gate FAILED.** \n\nHere are the specific issues:\n\n1. **New Coverage: 41.2% \u003c 80%** — The new code you added doesn't have enough test coverage (only 41.2% vs the required 80%)\n2. **New Violations: 3 \u003e 0** — There are 3 new code quality violations in your changes\n\nYou'll need to either add test coverage for the new code or fix the 3 violations to pass the quality gate."
+    }
+  ]
+}

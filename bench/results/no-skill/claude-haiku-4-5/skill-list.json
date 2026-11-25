@@ -1,0 +1,47 @@
+{
+  "case": "skill-list",
+  "model": "claude-haiku-4-5",
+  "key": "1-0409cffd93de058c-none-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 1,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: lists the skill copies",
+      "failures": [
+        "require: lists the skill copies",
+        "answer"
+      ],
+      "turns": 6,
+      "tokens": {
+        "input": 52,
+        "output": 1077,
+        "cacheCreation": 9256,
+        "cacheRead": 117679
+      },
+      "costUSD": 0.035716899999999996,
+      "durationMs": 16365,
+      "skillLoaded": false,
+      "skillListed": false,
+      "mcpConnected": true,
+      "commands": [
+        "which sonarless-mcp",
+        "\u003cworld\u003e/harness/bin/sonarless-mcp --version",
+        "mcp__sonarqube__sonarless_status"
+      ],
+      "calls": [
+        {
+          "tool": "sonarless_status",
+          "exit": 0
+        }
+      ],
+      "denials": [
+        "\u003cworld\u003e/harness/bin/sonarless-mcp --version",
+        "mcp__sonarqube__sonarless_status"
+      ],
+      "answer": "Based on the status check, **sonarless-mcp is installed and running**:\n\n- **Version**: v0.14.2\n- **Status**: Local MCP and work MCP both running\n- **SonarQube server**: Running (using 1.9 GiB)\n- **Remote connectivity**: The remote at http://sonar.example.com is reachable\n\nHowever, I cannot determine if v0.14.2 is the latest available version without checking upstream sources. To check if updates are available, you'd need to either check the sonarless-mcp release page or run an update check command, but I'm limited to read-only checks per your request.\n\nWould you like me to help you check for available updates?"
+    }
+  ]
+}

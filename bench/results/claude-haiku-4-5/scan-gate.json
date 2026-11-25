@@ -1,0 +1,90 @@
+{
+  "case": "scan-gate",
+  "model": "claude-haiku-4-5",
+  "key": "1-720448cfef2d07b9-08d02c6a1127a519-claude-haiku-4-5",
+  "passes": 3,
+  "graded": 3,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 6,
+      "tokens": {
+        "input": 46,
+        "output": 938,
+        "cacheCreation": 10931,
+        "cacheRead": 101743
+      },
+      "costUSD": 0.0367723,
+      "durationMs": 13398,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "sonarless_status",
+          "exit": 0
+        },
+        {
+          "tool": "sonarless_scan",
+          "exit": 0
+        }
+      ],
+      "answer": "**Quality Gate: FAILED** ❌\n\nThe analysis found two failing conditions:\n\n1. **New Code Coverage**: 41.2% (threshold: 80%) — Your code changes have insufficient test coverage\n2. **New Violations**: 3 violations found (threshold: 0) — There are 3 new code issues that need to be fixed\n\nYou'll need to address these issues before the quality gate can pass. Would you like me to get details about what those violations are?"
+    },
+    {
+      "run": 2,
+      "status": "pass",
+      "turns": 4,
+      "tokens": {
+        "input": 27,
+        "output": 677,
+        "cacheCreation": 9871,
+        "cacheRead": 55219
+      },
+      "costUSD": 0.028675899999999997,
+      "durationMs": 10376,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp scan"
+      ],
+      "calls": [
+        {
+          "argv": [
+            "scan"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "The quality gate **FAILED**. Your changes introduced two issues:\n\n1. **New coverage too low**: 41.2% (needs ≥80%)\n2. **New violations**: 3 violations found in the new code\n\nYou'll need to fix these before the quality gate passes. Would you like me to show you what the violations are?"
+    },
+    {
+      "run": 3,
+      "status": "pass",
+      "turns": 5,
+      "tokens": {
+        "input": 37,
+        "output": 977,
+        "cacheCreation": 10682,
+        "cacheRead": 78330
+      },
+      "costUSD": 0.034119000000000003,
+      "durationMs": 13385,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "sonarless_scan",
+          "exit": 0
+        }
+      ],
+      "answer": "**The quality gate FAILED.** \n\nYour code has two failing conditions:\n\n1. **New Coverage**: 41.2% \u003c 80% — The new code you added has insufficient test coverage (needs at least 80%)\n2. **New Violations**: 3 \u003e 0 — You introduced 3 new code violations (the gate requires zero)\n\nYou'll need to either add test coverage for the new code or fix the violations before the quality gate will pass."
+    }
+  ]
+}

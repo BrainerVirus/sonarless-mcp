@@ -1,0 +1,43 @@
+{
+  "case": "skill-list",
+  "model": "claude-haiku-4-5",
+  "key": "1-d4e41a66fb330b55-562c45df68291c94-claude-haiku-4-5",
+  "passes": 1,
+  "graded": 1,
+  "pass": true,
+  "runs": [
+    {
+      "run": 1,
+      "status": "pass",
+      "turns": 6,
+      "tokens": {
+        "input": 46,
+        "output": 1478,
+        "cacheCreation": 10865,
+        "cacheRead": 101550
+      },
+      "costUSD": 0.039321,
+      "durationMs": 18870,
+      "skillLoaded": true,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp skill list"
+      ],
+      "calls": [
+        {
+          "tool": "sonarless_status",
+          "exit": 0
+        },
+        {
+          "argv": [
+            "skill",
+            "list"
+          ],
+          "exit": 0
+        }
+      ],
+      "answer": "**No, the sonarless-mcp skill copies are not all up to date.**\n\nYou have two installed copies:\n\n| Path | Version | State |\n|------|---------|-------|\n| `~/.claude/skills/sonarless-mcp` | v0.14.2 | current ✓ |\n| `~/.config/opencode/skills/sonarless-mcp` | v0.12.0 | **outdated** ⚠️ |\n\nThe copy at `~/.config/opencode/skills/sonarless-mcp` is two versions behind. According to the documentation, you can update it with:\n\n```bash\nsonarless-mcp skill sync\n```"
+    }
+  ]
+}
