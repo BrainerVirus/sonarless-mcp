@@ -28,17 +28,18 @@ Tokens never go through chat. Ask the user to run these themselves:
 
 - Add a remote: `sonarless-mcp remote add <name> --url <url> [--branch <branch>]` (hidden token prompt; needs a **User token** `squ_…`, not an analysis token).
 - Change it: `sonarless-mcp remote update <name> --token` / `--url <url>` / `--branch <branch>`.
-- Other: `sonarless-mcp remote list|remove <name>`, `sonarless-mcp setup` (register in AI clients), `sonarless-mcp upgrade` (`--check` to see if one is due; it also upgrades itself in the background), `sonarless-mcp version`, `sonarless-mcp config` (settings, e.g. `SONARLESS_SONARQUBE_VERSION` to match CI).
+- Other: `sonarless-mcp remote list|remove <name>`, `sonarless-mcp setup` (register in AI clients; `--list` shows what is registered), `sonarless-mcp upgrade` (`--check` to see if one is due; it also upgrades itself in the background), `sonarless-mcp version`, `sonarless-mcp config` (settings, e.g. `SONARLESS_SONARQUBE_VERSION` to match CI; `sonarless-mcp --help` lists every `SONARLESS_*` variable).
 
-After adding/changing a remote, the AI client must be restarted to see it.
+After adding/changing a remote, the AI client must be restarted to see it (with direct HTTP clients the gateway keeps a workspace's remotes until it is unused for an hour, or until `sonarless-mcp stop --all`).
 
 ## Troubleshooting
 
 - Remote "unreachable": the user is probably off the VPN/network; carry on with `local`.
 - Remote token rejected: user runs `sonarless-mcp remote update <name> --token`.
-- First call slow: SonarQube is starting (it stops itself after 30 min unused and resumes on demand).
+- First call slow: SonarQube is starting (it stops itself after `SONARLESS_IDLE_TIMEOUT`, default 30 min, unused and resumes on demand).
 - What is running and how much memory it takes: `sonarless-mcp status` (`--json` for details: containers with memory, gateway sessions, stdio bridges, running scans). To free it all, the user runs `sonarless-mcp stop --all` (plain `stop` keeps the gateway).
 - Project not found on a server: scan it locally, or it isn't analyzed on that remote.
+- `sonarless_scan` or `sonarless-mcp scan` finished but the gate failed: that is a result, not an error; read the failing conditions with the SonarQube tools.
 - `sonarless-mcp upgrade` refused a release (signature or checksum check failed): the installed binary is unchanged; tell the user, don't work around it. `--allow-unsigned` is only for deliberately going back to a release from before signing (v0.8.1 or older).
 - This skill looks outdated, or a command says a flag is unknown: `sonarless-mcp skill list` shows each installed copy's version and state, `sonarless-mcp skill sync` updates them; a usage error names the flag you probably meant (`did you mean --tests?`), and `sonarless-mcp <command> --help` lists the rest.
 - Terminal says `sonarless-mcp` not found right after install: `rehash` (zsh), `hash -r` (bash), or a new tab (Warp).
