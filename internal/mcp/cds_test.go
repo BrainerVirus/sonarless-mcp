@@ -659,3 +659,50 @@ func TestRebuildArchiveOff(t *testing.T) {
 		t.Error("rebuild with AppCDS off did not fail")
 	}
 }
+
+// A remote MCP container maps a ready archive but never probes it, settles a
+// build or writes the record: what it sees must not change the local one's.
+func TestRemoteMapsTheArchiveButNeverProbesOrRecords(t *testing.T) {
+	for name, setup := range map[string]func(d *cdsDocker){
+		"archive fits": func(*cdsDocker) {},
+		"its JVM rejects the archive": func(d *cdsDocker) {
+			d.write("logs/sltest-mcp-work", "[0.020s][warning][cds] Checksum verification failed.\n")
+			d.write("nomap", "")
+		},
+		"a finished build waits": func(d *cdsDocker) {
+			d.container("sltest-cds", "exited", 1, map[string]string{LabelCDSBuild: "other-key"})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := newCDSDocker(t)
+			c := cdsContainer(t)
+			d.write("v/sltest-cds", "")
+			writeCDS(c.Cfg, cdsRecord{Key: testKey(c), State: CDSReady, Mapped: "2026-11-25T09:00:00Z"})
+			before, err := os.ReadFile(cdsFile(c.Cfg))
+			if err != nil {
+				t.Fatal(err)
+			}
+			setup(d)
+			r := NewRemote(c.Cfg, nil, "work", "http://sonar.example", c.Port)
+			if err := r.Ensure(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			run := d.runOf("sltest-mcp-work")
+			if !strings.Contains(run, " --mount type=volume,src=sltest-cds,dst=/cds,readonly ") ||
+				!strings.Contains(run, "-XX:SharedArchiveFile=/cds/"+testKey(c)+".jsa -Xshare:auto") {
+				t.Errorf("remote does not map the ready archive: %s", run)
+			}
+			for _, call := range d.calls() {
+				for _, banned := range []string{"exec ", "logs ", "rm -fv sltest-cds", "container inspect sltest-cds", "run -d --init --name sltest-cds "} {
+					if strings.HasPrefix(call, banned) {
+						t.Errorf("remote Ensure called docker %q", call)
+					}
+				}
+			}
+			after, _ := os.ReadFile(cdsFile(c.Cfg))
+			if string(after) != string(before) {
+				t.Errorf("remote Ensure changed the local record:\n%s\nto\n%s", before, after)
+			}
+		})
+	}
+}

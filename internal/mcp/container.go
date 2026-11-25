@@ -30,8 +30,10 @@ type Container struct {
 	// Image to run: a tag for the local container; for remotes the exact image
 	// ID the local one runs, so every server exposes the same tool schemas.
 	Image string
-	// BuildCDS: after a start without a class-data archive, build one in the
-	// background (the local container; remotes only map the one it builds).
+	// BuildCDS marks the class-data archive's owner, the local container: it
+	// settles and starts builds, checks that its JVM maps the archive and
+	// writes the archive's record. Remote containers only map a ready archive
+	// (read-only, -Xshare:auto) and never probe it or write the record.
 	BuildCDS bool
 }
 
@@ -106,7 +108,7 @@ func (m *Container) Ensure(ctx context.Context) error {
 	var imageID string
 	if c == nil || !c.Running() || c.Labels[sonar.LabelSpec] != m.spec() {
 		imageID = docker.ImageID(ctx, m.Image)
-		plan = planCDS(ctx, m.Cfg, imageID)
+		plan = planCDS(ctx, m.Cfg, imageID, m.BuildCDS)
 	}
 	switch {
 	case c == nil:
@@ -137,9 +139,11 @@ func (m *Container) Ensure(ctx context.Context) error {
 	if err := m.waitHTTP(ctx); err != nil {
 		return err
 	}
-	if plan.use {
+	switch {
+	case !m.BuildCDS: // a remote: never probes the archive or writes its record
+	case plan.use:
 		m.checkArchive(ctx, plan.key)
-	} else if plan.build && m.BuildCDS {
+	case plan.build:
 		m.startCDSBuild(ctx, plan.key)
 	}
 	return nil

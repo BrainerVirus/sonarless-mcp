@@ -118,7 +118,9 @@ memory ([measured](performance.md#appcds-for-the-mcp-jvm)).
   sonarless-mcp reads the JVM's log for a rejection and then looks in
   `/proc/<pid>/maps` inside the container for the mapped file. An archive the
   JVM rejected or did not map (a missing file, say) is recorded as failed with
-  the reason, and the next start runs plain.
+  the reason, and the next start runs plain. Only the local MCP container is
+  checked and recorded: remote MCP containers map a ready archive the same way
+  (read-only, `-Xshare:auto`) but never change its state.
 - **`status` and `sonarless-mcp appcds` show the state**: `none` (built after
   the next start), `building`, `ready` (used from the next start), `used`,
   `failed` (with the reason and when it is tried again) or `disabled`. The

@@ -144,13 +144,21 @@ func (p cdsPlan) label() string {
 	return ""
 }
 
-// planCDS settles the last build (see reapCDS) and decides what a start of an
-// MCP container running imageID does about the archive.
-func planCDS(ctx context.Context, cfg *config.Config, imageID string) cdsPlan {
+// planCDS decides what a start of an MCP container running imageID does
+// about the archive. For the archive's owner, the local container, it first
+// settles the last build (see reapCDS) and may reset the record; any other
+// container only reads the record and maps a ready archive, so a remote never
+// changes what the local container sees.
+func planCDS(ctx context.Context, cfg *config.Config, imageID string, owner bool) cdsPlan {
 	if !cfg.Bool(config.MCPAppCDS) || imageID == "" {
 		return cdsPlan{}
 	}
 	p := cdsPlan{key: cdsKey(imageID, jvmOpts(cfg))}
+	if !owner {
+		rec := readCDS(cfg)
+		p.use = rec.Key == p.key && rec.State == CDSReady && docker.VolumeExists(ctx, cfg.CDSName())
+		return p
+	}
 	rec, building := reapCDS(ctx, cfg)
 	switch {
 	case building:
@@ -244,6 +252,9 @@ func cdsRejection(logs string) string {
 // file. A rejected or unmapped archive is recorded as failed, so the next start
 // runs plain and the status says why; a mapped one confirms `used`.
 func (m *Container) checkArchive(ctx context.Context, key string) {
+	if !m.BuildCDS { // only the local container's starts speak for the record
+		return
+	}
 	c, err := docker.Inspect(ctx, m.name())
 	if err != nil {
 		return
@@ -259,7 +270,7 @@ func (m *Container) checkArchive(ctx context.Context, key string) {
 			}
 			return
 		case mapped:
-			if rec := readCDS(m.Cfg); m.BuildCDS && rec.Key == key && rec.State == CDSReady {
+			if rec := readCDS(m.Cfg); rec.Key == key && rec.State == CDSReady {
 				rec.Mapped = c.StartedAt
 				writeCDS(m.Cfg, rec)
 			}
@@ -306,6 +317,9 @@ func archiveMapped(ctx context.Context, name, key string) (mapped bool, unknown 
 // unless one already runs (its fixed name is the lock between processes). It
 // returns at once: the build takes about 15 s and the MCP server is already up.
 func (m *Container) startCDSBuild(ctx context.Context, key string) {
+	if !m.BuildCDS {
+		return
+	}
 	name := m.Cfg.CDSName()
 	if _, err := docker.Run(ctx, "volume", "create", "--label", sonar.LabelManaged+"=true", "--label", InstanceLabel(m.Cfg), name); err != nil {
 		writeCDS(m.Cfg, cdsRecord{Key: key, State: CDSFailed, Detail: err.Error()})
