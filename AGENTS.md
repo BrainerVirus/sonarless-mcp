@@ -23,7 +23,7 @@ in the README and LICENSE.
 | `internal/config/` | layered settings: defaults < user `config.env` < project `.sonarless.env` < env |
 | `internal/docker/` | thin `docker` CLI wrapper (no SDK) |
 | `internal/sonar/` | SonarQube API client, server container lifecycle, shared token, file locks |
-| `internal/mcp/` | shared MCP containers, the stdio shim (proxy, cache, per-server routing and defaults) and the HTTP gateway that serves the same shim per workspace to direct clients |
+| `internal/mcp/` | shared MCP containers and their AppCDS archive (`cds.go`: background build, state, fallback), the stdio shim (proxy, cache, per-server routing and defaults) and the HTTP gateway that serves the same shim per workspace to direct clients |
 | `internal/project/` | project root + key detection from every config source |
 | `internal/scan/` | cli / maven / gradle / dotnet scanners |
 | `internal/idle/` | activity stamp, idle watcher, detached process spawning |

@@ -15,7 +15,7 @@ Measured on 2026-11-25: Linux 6.8, 14 cores, 31 GiB RAM, Docker 29.10, SonarQube
 |---|---|---|
 | Is a 256m Elasticsearch heap enough for a large repo? | Yes. No OutOfMemoryError, no full GC, live old generation at most 72 MiB; same compute-engine time as 384m | `SONARLESS_SEARCH_HEAP=256m` kept |
 | Where does the MCP JVM's memory outside the heap go? | Class metadata (71 MiB) and symbols (34 MiB) for 14.5k loaded classes; code cache 13 MiB; 82 threads 8 MiB | `SONARLESS_MCP_JAVA_OPTS` kept |
-| Does AppCDS help the MCP JVM? | Yes: ready in 2.0 s instead of 4.1 s, java RSS 28 MiB lower | not wired in; see [AppCDS](#appcds-for-the-mcp-jvm) |
+| Does AppCDS help the MCP JVM? | Yes: ready in 2.1 s instead of 3.9 s, java RSS 25 to 30 MiB lower, with the archive sonarless-mcp builds itself | `SONARLESS_MCP_APPCDS=true`: built in the background, used from the next start; see [AppCDS](#appcds-for-the-mcp-jvm) |
 
 ## Elasticsearch heap: 256m against 384m
 
@@ -117,16 +117,100 @@ session.
 
 Tool latency did not change (every session's 12 calls finished in under 2 s).
 
-AppCDS is a clear win, but it is a feature rather than a new default value: the
-archive must be built for each MCP image (a training start and a dump, about
-10 s, after every image update), stored somewhere that survives container
-recreation (about 100 MiB), and passed in `JAVA_TOOL_OPTIONS`. With a stale
-archive (`scripts/perf/mcp-stale.sh`: the same jar with another timestamp
-mounted over it) the JVM logs
-`[cds] ... timestamp has changed`, runs without the archive and lands on the
-default numbers (ready 3.3 s, RSS 218 MiB), so a stale archive costs startup
-time, not correctness. Wiring it into sonarless-mcp is left as a
-follow-up.
+With a stale archive (`scripts/perf/mcp-stale.sh`: the same jar with another
+timestamp mounted over it) the JVM logs `[cds] ... timestamp has changed`, runs
+without the archive and lands on the default numbers (ready 3.3 s, RSS
+218 MiB), so a stale archive costs startup time, not correctness.
+
+### As shipped
+
+sonarless-mcp builds and uses the archive on its own
+(`SONARLESS_MCP_APPCDS`, [Configuration](configuration.md#mcp-class-data-archive-appcds)).
+The design follows from the measurements above and the ones below:
+
+- **Never block a start.** The archive needs a training start and a dump
+  (7 to 12 s on this machine), so the MCP container starts without one and a
+  one-off container, `<instance>-cds`, builds it once the server answers. Its
+  fixed name is the lock: a second process that tries to start a build gets
+  Docker's name conflict and leaves it to the first. The next start of the MCP
+  container uses the archive; a running container is never recreated for it.
+- **What the training run loads.** The build starts the MCP server with
+  `-XX:DumpLoadedClassList`, waits for `/health`, sends one `initialize`
+  without a token (the request path up to the 401), and stops it. It never
+  holds a SonarQube token, so it runs no agent session: that list has about
+  12,000 classes against 12,965 for the session-trained one above, and costs
+  about 5 MiB of java RSS after a session (205 against 201 MiB), nothing in
+  ready time.
+- **No SonarQube, no archive.** The MCP server does not answer `/health`
+  without a reachable SonarQube (measured: no answer after 30 s, with a
+  connection error to the configured URL), so a training start without one
+  lists only the classes of a failed start. There is no fallback class list:
+  the build only starts right after the MCP server got ready, and a training
+  start that never answers fails the build, which is recorded and tried again
+  after a day.
+- **Keyed by image ID and JVM options.** The archive is named
+  `<image ID, 12 hex>-<hash of SONARLESS_MCP_JAVA_OPTS>.jsa`, and the dump runs
+  with exactly the options of the runs that map it. A new image or new options
+  get a new archive; a successful build deletes every other one.
+- **Atomic publish.** The dump writes a temporary file, a test run maps it
+  with `-Xshare:on`, and only then is it renamed into place. A failed dump
+  (a full disk, say) removes the temporary file and keeps the previous
+  archive.
+- **Fail open.** Runs use `-Xshare:auto`, never `on`: whatever is wrong with
+  the archive, the JVM starts without it. sonarless-mcp reads the container's
+  log from that start on, and a `[warning][cds]` line (the JVM's reason for
+  not mapping the archive) records the archive as failed: the next start runs
+  plain, and `status` shows the reason. A failed build or a rejected archive
+  is tried again after a day, or at once for a new image or options.
+- **A named volume**, `<instance>-cds`, mounted read-only into the MCP
+  containers: not a bind mount, so it behaves the same on Docker Desktop and
+  with Windows paths. The build container mounts it at the image's own
+  `/app/storage`, so Docker gives the fresh volume that directory's owner and
+  the image's user (appuser, 100:101) writes the archive without a root step.
+
+**What the JVM does with a bad archive** (`-Xshare:auto`, the
+`sonarsource/sonarqube-mcp` JDK 21.0.13, `java -version` with the archive):
+
+| Archive | Without `-XX:+VerifySharedSpaces` | With it |
+|---|---|---|
+| Missing file | runs without it, logs nothing | the same |
+| Truncated | `[warning][cds] The shared archive file has been truncated.`, runs without it | the same |
+| First 4 bytes overwritten | `[warning][cds] The shared archive file has a bad magic number`, runs without it | the same |
+| 4 bytes overwritten in the middle | **maps it** (says `sharing`) | `[warning][cds] Checksum verification failed.`, runs without it |
+| Jar changed (another timestamp) | `[warning][cds] ... timestamp has changed.`, runs without it | the same |
+
+Without the checksum a damaged archive is mapped as if it were whole.
+`-XX:+VerifySharedSpaces` costs about 60 ms per JVM start (`java -version`
+with the archive, 10 rounds of 5 runs: 76 to 86 ms without, 129 to 152 ms
+with), against the 1.5 to 2 s the archive saves, so sonarless-mcp turns it on.
+A missing file is the one case the JVM does not report: sonarless-mcp checks
+that the volume exists before it mounts it, and builds again when it does not.
+
+**Shipped numbers.** The archive the `<instance>-cds` container built
+(11,698 classes, 95 MiB), run the way the MCP container runs it
+(`-XX:SharedArchiveFile=... -Xshare:auto -XX:+VerifySharedSpaces`, the volume
+mounted read-only), against the default options, alternating, 6 runs each with
+`scripts/perf/mcp-run.sh`:
+
+| | Ready (median) | Java RSS idle | Java RSS after session | Container after session |
+|---|---|---|---|---|
+| Default options, 6 runs | 3.9 s (3.4 to 5.7) | 219 MiB | 230 MiB | 206 MiB |
+| Default options + the built archive, 6 runs | 2.1 s (1.7 to 2.4) | 189 MiB | 205 MiB | 171 MiB |
+
+One archive run reported 247 MiB for the container after the session (the
+other five 171 to 172 MiB) with the same java RSS; the page cache Docker
+charges to a container's memory includes the mapped archive's pages when the
+container is the first to read them.
+
+The live checks on the perftest instance, with the built binary: no archive
+gave a plain start and a build in the background (7 s); after a stop the
+container was recreated with the archive (`/proc/<java>/maps` showed it
+mapped; `status`: `used`); 4 bytes overwritten in the archive gave
+`Checksum verification failed` in the log, a plain start, `status`:
+`failed`, and no rebuild on the following start; deleting the record file
+rebuilt it; `SONARLESS_MCP_APPCDS=false` recreated the container without the
+archive and started no build; another MCP image got its own key, a plain
+start and its own build, which replaced the other image's archive.
 
 ## Repeat the measurements
 
@@ -155,10 +239,17 @@ git -C <repo> archive HEAD | tar -x -C "$PERF_DIR/repo"
   scripts/perf/mcp-run.sh cds "$opts -XX:SharedArchiveFile=/cds/app.jsa" -v "$PERF_DIR/cds:/cds:ro"
   scripts/perf/mcp-nmt.sh nmt-cds "$opts -XX:SharedArchiveFile=/cds/app.jsa" -v "$PERF_DIR/cds:/cds:ro"
   scripts/perf/mcp-stale.sh "$opts"
+  # As shipped: let sonarless-mcp build the archive (start the MCP once, wait
+  # for perftest-cds to exit), then compare it with the default options.
+  key=<the key in $SONARLESS_HOME/cache/perftest-cds.json>
+  scripts/perf/mcp-run.sh plain "$opts"
+  scripts/perf/mcp-run.sh appcds "$opts -XX:SharedArchiveFile=/cds/$key.jsa -Xshare:auto -XX:+VerifySharedSpaces" \
+    --mount type=volume,src=perftest-cds,dst=/cds,readonly
 )
 ```
 
-Afterwards remove only the perftest resources: the containers `perftest-server`
-and `perftest-mcpx` (with `docker rm -fv`, which also drops the server's
-anonymous `/opt/sonarqube/temp` volume), the network `perftest` and the
-volumes `perftest-server-<version>-{data,extensions,logs}`.
+Afterwards remove only the perftest resources: the containers `perftest-server`,
+`perftest-mcp`, `perftest-mcpx` and `perftest-cds` (with `docker rm -fv`, which
+also drops the server's anonymous `/opt/sonarqube/temp` volume), the network
+`perftest` and the volumes `perftest-server-<version>-{data,extensions,logs}`
+and `perftest-cds`.

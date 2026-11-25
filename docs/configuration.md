@@ -37,6 +37,7 @@ An unknown key in either file is ignored with a warning.
 | `SONARLESS_MCP_TOOLSETS` | `coverage,duplications,issues,measures,projects,quality-gates,rules,security-hotspots` | comma-separated MCP toolsets to enable; see [MCP toolsets](#mcp-toolsets) |
 | `SONARLESS_MCP_READ_ONLY` | `false` | disable the MCP write tools |
 | `SONARLESS_MCP_JAVA_OPTS` | `-Xmx64m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ReservedCodeCacheSize=32m -XX:MaxMetaspaceSize=128m -Xss512k` | JVM options of the shared MCP server (`JAVA_TOOL_OPTIONS`), about 200 MiB instead of ~300 with the same tool latency; `none` keeps the JVM defaults; measured in [Performance](performance.md#mcp-jvm-native-memory) |
+| `SONARLESS_MCP_APPCDS` | `true` | start the MCP server from a class-data archive built in the background for its image and JVM options: ready in about 2 s instead of 3.5 to 4, about 30 MiB less memory; `false` neither builds nor uses one ([below](#mcp-class-data-archive-appcds)) |
 | `SONARLESS_IDLE_TIMEOUT` | `30m` | stop the containers after this long unused; a bare number is minutes; `0` keeps them running |
 | `SONARLESS_WEB_HEAP` / `SONARLESS_CE_HEAP` / `SONARLESS_SEARCH_HEAP` | `256m` / `384m` / `256m` | Java heaps of SonarQube's web server, compute engine and Elasticsearch (SonarQube's own: 512m each); raise `SONARLESS_CE_HEAP` if a big project's report fails with OutOfMemoryError. Changing one recreates the server container; its data is kept. The 256m Elasticsearch heap is [measured](performance.md#elasticsearch-heap-256m-against-384m) |
 | `SONARLESS_INSTANCE` | `sonarless` | names the containers (`-server`, `-mcp`), network and volumes |
@@ -88,6 +89,41 @@ drops about 7% of the tool list (1.4 of 21.7 KB with one remote, MCP server
 The setting applies to the local and every remote MCP container; changing it
 recreates them on next use.
 
+### MCP class-data archive (AppCDS)
+
+The MCP server is a Java program that loads about 12,000 classes at every
+start. With `SONARLESS_MCP_APPCDS=true` (the default) sonarless-mcp keeps those
+classes in a class-data archive the JVM maps instead of loading them again:
+the server answers in about 2 s instead of 3.5 to 4, and uses about 30 MiB less
+memory ([measured](performance.md#appcds-for-the-mcp-jvm)).
+
+- **A start never waits for it.** Without a finished archive for the current
+  MCP image and `SONARLESS_MCP_JAVA_OPTS`, the MCP container starts as before;
+  once it answers, a one-off container `<instance>-cds` builds the archive in
+  the background (about 10 s: a training start of the MCP server, then the
+  dump). The next start of the MCP container (after the idle stop, `stop`, or
+  an image update) uses it. A running container is never restarted for it.
+- **One archive, the current one.** It lives in the Docker volume
+  `<instance>-cds` (about 100 MiB), mounted read-only into the MCP containers.
+  A new MCP image or new JVM options get a new archive; the build removes the
+  old one.
+- **Never a failed start.** The JVM checks the archive before it maps it
+  (`-Xshare:auto -XX:+VerifySharedSpaces`) and runs without it when it does not
+  fit or is damaged. A failed build or a rejected archive is recorded and tried
+  again after a day, or at once for a new image or new JVM options.
+- **The training start needs the local SonarQube**, as every MCP start does
+  (the server checks it before it answers); the build only runs right after
+  the MCP server got ready.
+- **`status` shows the state**: `none` (built after the next start),
+  `building`, `ready` (used from the next start), `used`, `failed` (with the
+  reason and when it is tried again) or `disabled`. The last build's outcome is
+  `<cache dir>/<instance>-cds.json`; deleting that file makes the next start
+  try again.
+
+`SONARLESS_MCP_APPCDS=false` recreates the MCP containers without the archive
+on next use and builds none; `docker volume rm <instance>-cds` frees its disk
+space.
+
 ## Files
 
 | | Linux | macOS | Windows |
@@ -104,10 +140,12 @@ In the config dir: `config.env`, `mcp-gateway-token` (owner-only),
 
 In the cache dir: logs (`gateway.log`, `update.log`, `watcher.log`),
 `gateway.pid`, `update-state.json`, the Sigstore root cache `sigstore-tuf/`,
-locks and the MCP tool cache.
+locks, the MCP tool cache and `<instance>-cds.json` (the last
+[class-data archive](#mcp-class-data-archive-appcds) build).
 
 Scan history lives in Docker volumes named after `SONARLESS_INSTANCE`, one set
-per SonarQube version.
+per SonarQube version. The MCP class-data archive lives in the volume
+`<instance>-cds`.
 
 ## SonarQube versions
 

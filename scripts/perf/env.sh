@@ -2,8 +2,9 @@
 # Source this before the other scripts in scripts/perf. It points every
 # sonarless-mcp call at a throwaway instance so a real install is never touched:
 # its own SONARLESS_HOME, HOME and XDG dirs under PERF_DIR, the instance name
-# perftest (containers perftest-server and perftest-mcp, network perftest,
-# volumes perftest-server-<version>-*) and ports away from the defaults.
+# perftest (containers perftest-server, perftest-mcp and the AppCDS build
+# perftest-cds, network perftest, volumes perftest-server-<version>-* and
+# perftest-cds) and ports away from the defaults.
 #
 #   export PERF_DIR=/tmp/sl-perf; . scripts/perf/env.sh
 #

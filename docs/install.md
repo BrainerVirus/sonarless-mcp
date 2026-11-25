@@ -84,5 +84,6 @@ sonarless-mcp stop --all             # stop the containers and the gateway
 
 Then delete the binary, the config dir and the cache dir
 ([file locations](configuration.md#files)). Scan history lives in Docker
-volumes named after `SONARLESS_INSTANCE` (default `sonarless`); remove them
-with `docker volume rm` if you want it gone too.
+volumes named after `SONARLESS_INSTANCE` (default `sonarless`), and the MCP
+class-data archive in `<instance>-cds`; remove them with `docker volume rm` if
+you want them gone too.
