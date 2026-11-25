@@ -223,10 +223,14 @@ func TestSkillInstallRespectsUserSkill(t *testing.T) {
 	if !strings.Contains(string(b), "name: sonarless-mcp") || !strings.Contains(string(b), skillMarker) {
 		t.Errorf("skill content: %.80s", b)
 	}
-	// Outdated copy gets refreshed after an update.
+	// An outdated copy gets refreshed when a newer release runs.
 	_ = os.WriteFile(f, []byte("old "+skillMarker), 0o644)
+	setVersion(t, "99.0.0")
 	if n := RefreshSkills(env); n != 1 {
 		t.Errorf("refreshed %d", n)
+	}
+	if b, _ := os.ReadFile(f); SkillVersionOf(b) != "99.0.0" {
+		t.Errorf("refreshed copy is not stamped 99.0.0:\n%.200s", b)
 	}
 	if err := claude.RemoveSkill(env); err != nil {
 		t.Fatal(err)
