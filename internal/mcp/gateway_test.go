@@ -34,6 +34,9 @@ func fakeSonar(t *testing.T) *httptest.Server {
 			_, _ = io.WriteString(w, `{}`)
 			return
 		}
+		if r.URL.Path == "/health" { // the MCP server's readiness probe
+			return
+		}
 		var m message
 		_ = json.NewDecoder(r.Body).Decode(&m)
 		if len(m.ID) == 0 {

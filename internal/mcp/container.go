@@ -135,8 +135,8 @@ func (m *Container) create(ctx context.Context) error {
 		"-e", "SONARQUBE_URL=" + m.SonarURL,
 		"-e", "SONARQUBE_LOG_TO_FILE_DISABLED=true",
 	}
-	if v := m.Cfg.Get(config.MCPToolsets); v != "" {
-		args = append(args, "-e", "SONARQUBE_TOOLSETS="+v)
+	if env := toolsetsEnv(m.Cfg.Get(config.MCPToolsets)); env != "" {
+		args = append(args, "-e", env)
 	}
 	if m.Cfg.Bool(config.MCPReadOnly) {
 		args = append(args, "-e", "SONARQUBE_READ_ONLY=true")
@@ -153,19 +153,25 @@ func (m *Container) create(ctx context.Context) error {
 	return err
 }
 
-// Alive reports whether the MCP endpoint answers HTTP at all (an
-// unauthenticated probe gets a quick 401).
+// HealthURL is the MCP server's unauthenticated health endpoint.
+func (m *Container) HealthURL() string { return fmt.Sprintf("http://127.0.0.1:%d/health", m.Port) }
+
+// Alive reports whether the MCP server answers 200 on /health. The server's
+// security filter answers it before authentication once Jetty is up, the same
+// moment /mcp starts answering 401, and its tools are loaded before Jetty
+// starts (SonarQubeMcpServer.start, 1.33). Unlike "any HTTP answer on /mcp", it
+// rejects another program on the port, and it logs no auth failure per poll.
 func (m *Container) Alive(ctx context.Context) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, m.URL(), strings.NewReader("{}"))
-	req.Header.Set("Content-Type", "application/json")
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, m.HealthURL(), nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return false
 	}
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
-	return true
+	return resp.StatusCode == http.StatusOK
 }
 
 func (m *Container) waitHTTP(ctx context.Context) error {
@@ -191,6 +197,16 @@ func (m *Container) Stop(ctx context.Context) error { return docker.Stop(ctx, m.
 func (m *Container) Running(ctx context.Context) bool {
 	c, err := docker.Inspect(ctx, m.name())
 	return err == nil && c.Running()
+}
+
+// toolsetsEnv is the SONARQUBE_TOOLSETS entry for the MCP server, or "" for
+// "default" / empty: the server's own default toolsets.
+func toolsetsEnv(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" || strings.EqualFold(v, "default") {
+		return ""
+	}
+	return "SONARQUBE_TOOLSETS=" + v
 }
 
 // javaToolOptions is the JAVA_TOOL_OPTIONS entry for the MCP server's JVM
