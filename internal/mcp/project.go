@@ -14,7 +14,7 @@ func (s *Shim) annotateInitialize(result json.RawMessage) json.RawMessage {
 		fmt.Fprintf(&note, "\n\nThis workspace is SonarQube project %q (detected from %s); tools default projectKey to it.",
 			s.Project.Key, s.Project.KeySource)
 	}
-	if len(s.Backends) > 1 {
+	if len(s.backends()) > 1 {
 		note.WriteString("\n\nEvery tool takes an optional `server` argument: " + s.serverHelp() +
 			" Use the local server by default (the current working copy); query a remote one only when the user asks" +
 			" about CI or remote results. Remotes can be offline (e.g. VPN not connected): if one is unreachable, say so" +
@@ -42,7 +42,7 @@ func (s *Shim) annotateInitialize(result json.RawMessage) json.RawMessage {
 
 func (s *Shim) serverHelp() string {
 	var parts []string
-	for _, b := range s.Backends {
+	for _, b := range s.backends() {
 		parts = append(parts, fmt.Sprintf("%q = %s", b.Name, b.About))
 	}
 	return strings.Join(parts, "; ") + "."
@@ -56,7 +56,7 @@ func (s *Shim) annotateTools(result json.RawMessage) json.RawMessage {
 
 func (s *Shim) annotateRemoteTools(result json.RawMessage) json.RawMessage {
 	inject := s.Project != nil && s.local().inject.Load()
-	multi := len(s.Backends) > 1
+	multi := len(s.backends()) > 1
 	if !inject && !multi {
 		return result
 	}
@@ -96,8 +96,9 @@ func (s *Shim) annotateRemoteTools(result json.RawMessage) json.RawMessage {
 			}
 		}
 		if multi {
-			enum := make([]any, len(s.Backends))
-			for i, b := range s.Backends {
+			backends := s.backends()
+			enum := make([]any, len(backends))
+			for i, b := range backends {
 				enum[i] = b.Name
 			}
 			props["server"] = map[string]any{

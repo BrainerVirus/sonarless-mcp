@@ -334,6 +334,16 @@ func (g *Gateway) session(ws string) (*gatewaySession, error) {
 			return nil, err
 		}
 		shim.Stateless = true
+		if shim.Reload == nil {
+			// After a remotes.json change: the backends a new session would get.
+			shim.Reload = func() ([]*Backend, error) {
+				fresh, err := g.NewSession(key)
+				if err != nil {
+					return nil, err
+				}
+				return fresh.Backends, nil
+			}
+		}
 		s = &gatewaySession{shim: shim}
 		shim.notify = s.notify
 		ctx := g.ctx

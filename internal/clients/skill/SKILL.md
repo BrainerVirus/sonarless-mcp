@@ -30,7 +30,7 @@ Tokens never go through chat. Ask the user to run these themselves:
 - Change it: `sonarless-mcp remote update <name> --token` / `--url <url>` / `--branch <branch>`.
 - Other: `sonarless-mcp remote list|remove <name>`, `sonarless-mcp setup` (register in AI clients; `--list` shows what is registered), `sonarless-mcp upgrade` (`--check` to see if one is due; it also upgrades itself in the background), `sonarless-mcp version`, `sonarless-mcp config` (settings, e.g. `SONARLESS_SONARQUBE_VERSION` to match CI; `sonarless-mcp --help` lists every `SONARLESS_*` variable).
 
-After adding/changing a remote, the AI client must be restarted to see it (with direct HTTP clients the gateway keeps a workspace's remotes until it is unused for an hour, or until `sonarless-mcp stop --all`).
+After adding/changing/removing a remote, the next MCP request already uses it (no client restart); if the client still lists the old `server` choices, reconnect the MCP server.
 
 ## Troubleshooting
 

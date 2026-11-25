@@ -276,7 +276,8 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 			}
 			rec, _ := idle.Register(e.cfg, idle.Proc{Kind: idle.KindShim, Workspace: e.project.Root})
 			defer rec.Done() // `status` lists running bridges
-			shim := &mcp.Shim{Cfg: e.cfg, Backends: backends, Local: agentTools(e), Project: e.project, Log: os.Stderr}
+			shim := &mcp.Shim{Cfg: e.cfg, Backends: backends, Local: agentTools(e), Project: e.project, Log: os.Stderr,
+				Reload: func() ([]*mcp.Backend, error) { return shimBackends(e) }} // remotes.json changed
 			return shim.Run(ctx, os.Stdin, os.Stdout)
 		},
 	}

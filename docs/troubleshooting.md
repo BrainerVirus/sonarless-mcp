@@ -63,7 +63,8 @@ lists the rest.
   keeps working.
 - **Token rejected.** `sonarless-mcp remote update <name> --token`. Use a User
   token (`squ_…`), not an analysis token.
-- **A new remote does not show up.** Restart the AI client
+- **A new remote does not show up.** The next tool call already accepts it; if
+  the client still lists the old `server` choices, reconnect the MCP server
   ([Remotes](remotes.md#asking-about-a-remote)).
 
 ## Upgrades and the skill
