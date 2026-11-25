@@ -30,6 +30,9 @@ type Container struct {
 	// Image to run: a tag for the local container; for remotes the exact image
 	// ID the local one runs, so every server exposes the same tool schemas.
 	Image string
+	// BuildCDS: after a start without a class-data archive, build one in the
+	// background (the local container; remotes only map the one it builds).
+	BuildCDS bool
 }
 
 // LabelInstance names the SONARLESS_INSTANCE an MCP container belongs to,
@@ -42,7 +45,7 @@ func InstanceLabel(cfg *config.Config) string { return LabelInstance + "=" + cfg
 
 // NewLocal is the MCP container for the local SonarQube.
 func NewLocal(cfg *config.Config, log io.Writer) *Container {
-	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer(), Port: cfg.Int(config.MCPPort), SonarURL: cfg.ServerURLInNetwork(), Image: cfg.Get(config.MCPImage)}
+	return &Container{Cfg: cfg, Log: log, Name: cfg.MCPContainer(), Port: cfg.Int(config.MCPPort), SonarURL: cfg.ServerURLInNetwork(), Image: cfg.Get(config.MCPImage), BuildCDS: true}
 }
 
 // NewRemote is the MCP container for a remote SonarQube.
@@ -65,7 +68,7 @@ func (m *Container) name() string { return m.Name }
 func (m *Container) URL() string { return fmt.Sprintf("http://127.0.0.1:%d/mcp", m.Port) }
 
 func (m *Container) spec() string {
-	h := sha256.Sum256([]byte(strings.Join([]string{
+	parts := []string{
 		m.Image,
 		fmt.Sprint(m.Port),
 		m.Cfg.Network(),
@@ -73,12 +76,21 @@ func (m *Container) spec() string {
 		m.Cfg.Get(config.MCPToolsets),
 		m.Cfg.Get(config.MCPReadOnly),
 		m.Cfg.Get(config.MCPJavaOpts),
-	}, "\x00")))
+	}
+	// Only when off, so the default keeps the spec (and the container) of
+	// installs from before AppCDS. Whether an archive exists is not part of
+	// the spec: a running container is never recreated to pick one up.
+	if !m.Cfg.Bool(config.MCPAppCDS) {
+		parts = append(parts, "appcds=false")
+	}
+	h := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(h[:8])
 }
 
 // Ensure starts (or creates/recreates) the MCP container and waits until it
-// answers HTTP.
+// answers HTTP. A container it creates or starts maps the class-data archive
+// when a finished one fits; without one it starts plain and, for the local
+// container, a build starts in the background once the server answers.
 func (m *Container) Ensure(ctx context.Context) error {
 	unlock, err := sonar.LockFile(m.Cfg.CacheDir, m.name()+".lock")
 	if err != nil {
@@ -86,41 +98,61 @@ func (m *Container) Ensure(ctx context.Context) error {
 	}
 	defer unlock()
 	c, err := docker.Inspect(ctx, m.name())
+	if err != nil && !errors.Is(err, docker.ErrNotFound) {
+		return err
+	}
+	// The archive only matters to a container this call creates or starts.
+	var plan cdsPlan
+	var imageID string
+	if c == nil || !c.Running() || c.Labels[sonar.LabelSpec] != m.spec() {
+		imageID = docker.ImageID(ctx, m.Image)
+		plan = planCDS(ctx, m.Cfg, imageID)
+	}
 	switch {
-	case errors.Is(err, docker.ErrNotFound):
-		if err := m.create(ctx); err != nil {
+	case c == nil:
+		if err := m.create(ctx, plan); err != nil {
 			return err
 		}
-	case err != nil:
-		return err
 	case c.Labels[sonar.LabelSpec] != m.spec():
 		if m.Log != nil {
 			fmt.Fprintf(m.Log, "MCP settings changed; recreating %s...\n", m.name())
 		}
-		if err := docker.Remove(ctx, m.name()); err != nil {
+		if err := m.recreate(ctx, plan); err != nil {
 			return err
 		}
-		if err := m.create(ctx); err != nil {
-			return err
-		}
-	case !c.Running() && c.ImageID != docker.ImageID(ctx, m.Image):
-		// A newer image was pulled (auto-update); pick it up while nothing uses
-		// the container. A running container is never swapped mid-session.
-		if err := docker.Remove(ctx, m.name()); err != nil {
-			return err
-		}
-		if err := m.create(ctx); err != nil {
+	case !c.Running() && (c.ImageID != imageID || c.Labels[LabelCDS] != plan.label()):
+		// A newer image was pulled (auto-update), or an archive was built or
+		// rejected since: pick it up while nothing uses the container. A
+		// running container is never swapped mid-session.
+		if err := m.recreate(ctx, plan); err != nil {
 			return err
 		}
 	case !c.Running():
 		if err := docker.Start(ctx, m.name()); err != nil {
 			return err
 		}
+	default:
+		return m.waitHTTP(ctx)
 	}
-	return m.waitHTTP(ctx)
+	if err := m.waitHTTP(ctx); err != nil {
+		return err
+	}
+	if plan.use {
+		m.checkArchive(ctx, plan.key)
+	} else if plan.build && m.BuildCDS {
+		m.startCDSBuild(ctx, plan.key)
+	}
+	return nil
 }
 
-func (m *Container) create(ctx context.Context) error {
+func (m *Container) recreate(ctx context.Context, plan cdsPlan) error {
+	if err := docker.Remove(ctx, m.name()); err != nil {
+		return err
+	}
+	return m.create(ctx, plan)
+}
+
+func (m *Container) create(ctx context.Context, plan cdsPlan) error {
 	if m.Log != nil {
 		fmt.Fprintf(m.Log, "Creating shared MCP container %s (%s)...\n", m.name(), m.Image)
 	}
@@ -130,6 +162,7 @@ func (m *Container) create(ctx context.Context) error {
 		"--label", sonar.LabelManaged + "=true",
 		"--label", InstanceLabel(m.Cfg),
 		"--label", sonar.LabelSpec + "=" + m.spec(),
+		"--label", LabelCDS + "=" + plan.label(),
 		"-e", "SONARQUBE_TRANSPORT=http",
 		"-e", "SONARQUBE_HTTP_HOST=0.0.0.0",
 		"-e", "SONARQUBE_URL=" + m.SonarURL,
@@ -141,8 +174,15 @@ func (m *Container) create(ctx context.Context) error {
 	if m.Cfg.Bool(config.MCPReadOnly) {
 		args = append(args, "-e", "SONARQUBE_READ_ONLY=true")
 	}
-	if env := javaToolOptions(m.Cfg.Get(config.MCPJavaOpts)); env != "" {
-		args = append(args, "-e", env)
+	opts := jvmOpts(m.Cfg)
+	if plan.use {
+		// A named volume, not a bind mount: the same on Docker Desktop and
+		// with Windows paths.
+		args = append(args, "--mount", "type=volume,src="+m.Cfg.CDSName()+",dst="+cdsMount+",readonly")
+		opts = cdsRunOpts(opts, plan.key)
+	}
+	if opts != "" {
+		args = append(args, "-e", "JAVA_TOOL_OPTIONS="+opts)
 	}
 	args = append(args, m.Image)
 	_, err := docker.Run(ctx, args...)

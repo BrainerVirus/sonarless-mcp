@@ -23,10 +23,12 @@ import (
 type statusReport struct {
 	Docker     string            `json:"docker,omitempty"` // why containers are missing: docker unavailable
 	Containers []containerStatus `json:"containers"`
-	Gateway    mcp.GatewayState  `json:"gateway"`
-	Shims      []idle.Proc       `json:"shims"`
-	Scans      []idle.Proc       `json:"scans"`
-	Idle       idleStatus        `json:"idle"`
+	// AppCDS is the local MCP server's class-data archive (absent without docker).
+	AppCDS  *mcp.CDSStatus   `json:"appcds,omitempty"`
+	Gateway mcp.GatewayState `json:"gateway"`
+	Shims   []idle.Proc      `json:"shims"`
+	Scans   []idle.Proc      `json:"scans"`
+	Idle    idleStatus       `json:"idle"`
 }
 
 type containerStatus struct {
@@ -119,7 +121,18 @@ func collectStatus(ctx context.Context, e *env, dockerErr error) statusReport {
 	for i := range r.Containers {
 		r.Containers[i].Memory = mem[r.Containers[i].Name]
 	}
+	cds := mcp.ArchiveStatus(ctx, e.cfg)
+	r.AppCDS = &cds
 	return r
+}
+
+// cdsLine describes the MCP server's class-data archive: "used",
+// "failed: <why>".
+func cdsLine(s *mcp.CDSStatus) string {
+	if s.Detail == "" {
+		return s.State
+	}
+	return s.State + ": " + s.Detail
 }
 
 // scanLine describes a running scan: "app (maven, scanning 2m0s, /ws/app)".
@@ -142,6 +155,9 @@ func printStatus(w io.Writer, r statusReport) {
 			mem = "-"
 		}
 		fmt.Fprintf(w, "%-7s %-20s %-48s %-9s %s\n", c.Role, c.Name, state, mem, c.URL)
+	}
+	if r.AppCDS != nil {
+		fmt.Fprintf(w, "appcds  MCP class-data archive %s\n", cdsLine(r.AppCDS))
 	}
 	g := r.Gateway
 	switch {
