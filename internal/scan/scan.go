@@ -30,8 +30,24 @@ type Options struct {
 	Out       io.Writer
 }
 
+// GateFailed is the quality gate status of a project that fails its gate.
+const GateFailed = "ERROR"
+
+// Result is what a finished scan learned about the project's quality gate.
+type Result struct {
+	Gate    string // OK, ERROR or NONE; "" when it could not be read
+	GateErr error  // why the gate could not be read
+}
+
 // Run scans p and waits for the server to finish processing the report.
 func Run(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.Project, opt Options) error {
+	_, err := RunGate(ctx, cfg, srv, p, opt)
+	return err
+}
+
+// RunGate is Run that also returns the quality gate the scan ended with. A
+// failing gate is a result, not an error.
+func RunGate(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.Project, opt Options) (Result, error) {
 	if opt.Out == nil {
 		opt.Out = os.Stdout
 	}
@@ -50,7 +66,7 @@ func Run(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.
 
 	token, err := prepare(ctx, cfg, srv, p)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	rec.Update(idle.ScanScanning)
 	fmt.Fprintf(opt.Out, "Scanning %s\n  project: %s (%s)\n  name:    %s\n  scanner: %s\n", p.Root, p.Key, p.KeySource, p.Name, scanner)
@@ -74,10 +90,10 @@ func Run(ctx context.Context, cfg *config.Config, srv *sonar.Server, p *project.
 	case project.BuildCLI:
 		err = runCLI(ctx, cfg, p, token, props, opt)
 	default:
-		return fmt.Errorf("unknown scanner %q (want cli, maven, gradle or dotnet)", scanner)
+		return Result{}, fmt.Errorf("unknown scanner %q (want cli, maven, gradle or dotnet)", scanner)
 	}
 	if err != nil {
-		return fmt.Errorf("%s scan failed: %w", scanner, err)
+		return Result{}, fmt.Errorf("%s scan failed: %w", scanner, err)
 	}
 	return waitProcessed(ctx, cfg, srv, p.Key, opt.Out)
 }
@@ -281,7 +297,7 @@ func local(ctx context.Context, dir, bin string, args []string, out io.Writer) e
 }
 
 // waitProcessed waits for the background task that ingests the report.
-func waitProcessed(ctx context.Context, cfg *config.Config, srv *sonar.Server, key string, out io.Writer) error {
+func waitProcessed(ctx context.Context, cfg *config.Config, srv *sonar.Server, key string, out io.Writer) (Result, error) {
 	admin := srv.Admin()
 	fmt.Fprint(out, "Waiting for SonarQube to process the report ")
 	deadline := time.Now().Add(10 * time.Minute)
@@ -292,18 +308,22 @@ func waitProcessed(ctx context.Context, cfg *config.Config, srv *sonar.Server, k
 		}
 		if time.Now().After(deadline) {
 			fmt.Fprintln(out)
-			return errors.New("report still processing after 10m; check the web UI")
+			return Result{}, errors.New("report still processing after 10m; check the web UI")
 		}
 		fmt.Fprint(out, ".")
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return Result{}, ctx.Err()
 		case <-time.After(2 * time.Second):
 		}
 	}
-	gate, _ := admin.QualityGate(ctx, key)
-	fmt.Fprintf(out, "\nDone. Quality gate: %s\n  %s/dashboard?id=%s\n", gate, cfg.ServerURL(), key)
-	return nil
+	gate, err := admin.QualityGate(ctx, key)
+	shown := gate
+	if err != nil {
+		gate, shown = "", "unknown ("+err.Error()+")"
+	}
+	fmt.Fprintf(out, "\nDone. Quality gate: %s\n  %s/dashboard?id=%s\n", shown, cfg.ServerURL(), key)
+	return Result{Gate: gate, GateErr: err}, nil
 }
 
 // asUser runs a build container as the current user on Linux, so build

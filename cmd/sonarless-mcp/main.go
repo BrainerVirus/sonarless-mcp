@@ -19,7 +19,6 @@ import (
 	"github.com/BrainerVirus/sonarless-mcp/internal/idle"
 	"github.com/BrainerVirus/sonarless-mcp/internal/mcp"
 	"github.com/BrainerVirus/sonarless-mcp/internal/project"
-	"github.com/BrainerVirus/sonarless-mcp/internal/scan"
 	"github.com/BrainerVirus/sonarless-mcp/internal/sonar"
 	"github.com/spf13/cobra"
 )
@@ -90,7 +89,7 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		printUsageHint(os.Stderr, ran, err, os.Args[1:])
-		os.Exit(1)
+		os.Exit(exitCode(err))
 	}
 }
 
@@ -101,7 +100,8 @@ func newRootCommand(ctx context.Context) *cobra.Command {
 		Short: "Local SonarQube for any project, plus a shared MCP server for AI agents",
 		Long: "Local SonarQube for any project, plus a shared MCP server for AI agents.\n\n" +
 			"Exit status: 0 on success, 1 on any error (a usage error names the flag you\n" +
-			"probably meant). A failing quality gate is reported, not an error.\n\n" +
+			"probably meant), 2 when scan --fail-on-gate (or " + config.FailOnGate + "=true)\n" +
+			"finds a failing quality gate. Without it a failing gate is reported, not an error.\n\n" +
 			config.EnvHelp(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -154,30 +154,7 @@ func newRootCommand(ctx context.Context) *cobra.Command {
 
 	root.AddCommand(statusCommand())
 
-	var scanOpt scan.Options
-	scanCmd := &cobra.Command{
-		Use:   "scan [dir]",
-		Short: "Scan a project (auto-detects key and maven/gradle/dotnet/cli scanner)",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			e, err := load(dirArg(args), true)
-			if err != nil {
-				return err
-			}
-			autoUpdate(e.cfg)
-			if scanOpt.Scanner == "" {
-				scanOpt.Scanner = e.cfg.Get(config.Scanner)
-			}
-			if !cmd.Flags().Changed("tests") {
-				scanOpt.Tests = e.cfg.Bool(config.ScanTests)
-			}
-			return scan.Run(ctx, e.cfg, e.server, e.project, scanOpt)
-		},
-	}
-	scanCmd.Flags().StringVar(&scanOpt.Scanner, "scanner", "", "force scanner: cli, maven, gradle or dotnet")
-	scanCmd.Flags().BoolVar(&scanOpt.Tests, "tests", false, "run tests during build-based scans (for coverage)")
-	scanCmd.Flags().StringArrayVarP(&scanOpt.ExtraArgs, "define", "D", nil, "extra analysis property, e.g. -D sonar.exclusions=**/gen/**")
-	root.AddCommand(scanCmd)
+	root.AddCommand(scanCommand(ctx))
 
 	var resultsOut string
 	results := &cobra.Command{
