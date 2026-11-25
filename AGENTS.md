@@ -6,9 +6,11 @@ Guidance for AI agents (and humans) working on sonarless-mcp.
 
 A single Go binary that runs local SonarQube for AI agents: one shared
 SonarQube server and one shared SonarQube MCP server (Streamable HTTP) per
-machine, a stdio shim (`sonarless-mcp mcp`) that every client launches, project
-key detection, scans for any build system, an idle watcher, self-update, and a
-setup wizard that registers the MCP server in AI clients. It grew out of
+machine, an HTTP gateway (`sonarless-mcp serve`) most clients connect to and a
+stdio bridge (`sonarless-mcp mcp`) for the rest, project key detection, scans
+for any build system, remote SonarQube servers, an idle watcher, signed
+self-update, an agent skill, and a setup wizard that registers the MCP server
+in AI clients. It grew out of
 [gitricko/sonarless](https://github.com/gitricko/sonarless); keep that credit
 in the README and LICENSE.
 
@@ -16,7 +18,7 @@ in the README and LICENSE.
 
 | Path | Owns |
 |---|---|
-| `cmd/sonarless-mcp/` | CLI commands (cobra); `setup.go` wizard, `gateway.go` `serve`/`ensure`, `upgrade.go` self-upgrade (`update` is an alias), `version.go`, `notice.go` the terminal update notice, `agenttools.go` the `sonarless_*` MCP tools |
+| `cmd/sonarless-mcp/` | CLI commands (cobra; `newRootCommand` in `main.go` builds the tree); `setup.go` wizard, `gateway.go` `serve`/`ensure`, `status.go` `status`/`stop`, `remote.go`, `skill.go`, `upgrade.go` self-upgrade (`update` is an alias), `version.go`, `notice.go` the terminal update notice, `hints.go` flag typo hints, `agenttools.go` the `sonarless_*` MCP tools |
 | `internal/config/` | layered settings: defaults < user `config.env` < project `.sonarless.env` < env |
 | `internal/docker/` | thin `docker` CLI wrapper (no SDK) |
 | `internal/sonar/` | SonarQube API client, server container lifecycle, shared token, file locks |
@@ -28,6 +30,7 @@ in the README and LICENSE.
 | `internal/remote/` | remote SonarQube servers (remotes.json + private token files) |
 | `internal/clients/` | AI client detection, config editing (direct HTTP entry or stdio shim per client), gateway login autostart (systemd, launchd, Windows Run key), the embedded agent skill (`skill/SKILL.md`) |
 | `internal/tui/` | the setup picker (bubbletea) |
+| `docs/` | user docs, one page per topic; `README.md` stays the fast path and links them |
 | `install` | single entry script, valid sh and PowerShell; hands off to the platform installer |
 | `install.sh`, `install.ps1` | platform installers (download, verify, install, then `setup`) |
 
@@ -55,8 +58,16 @@ git config core.hooksPath .githooks   # once per clone: local commit-msg check
   shim can reach; progress goes to stderr.
 - Anything several clients can do at once (create containers, refresh the
   token, update) takes a lock via `sonar.LockFile`.
-- Changing user-visible behavior or settings: update `README.md` in the same change, and
-  `internal/clients/skill/SKILL.md` if agents should know about it.
+- Changing user-visible behavior or settings: update the `docs/` page (and
+  `README.md` if the fast path changes) in the same change, and
+  `internal/clients/skill/SKILL.md` if agents should know about it. A new
+  `SONARLESS_*` variable goes in `config.Keys` (a setting) or `config.OtherEnv`
+  (environment only), so `sonarless-mcp --help` lists it.
+- `cmd/sonarless-mcp/docs_test.go` parses every `sonarless-mcp …` command line
+  in code spans and fenced blocks of `README.md`, `AGENTS.md`, `docs/` and the
+  skill against the real command tree, and fails with `file:line` on an unknown
+  command or flag. Write a deliberately wrong command line in plain text, not
+  in code.
 
 ## Commits and releases
 

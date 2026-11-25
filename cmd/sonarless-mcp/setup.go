@@ -29,10 +29,14 @@ With --remove, unregister instead.
 
 Clients that can reach the shared gateway ("sonarless-mcp serve") over HTTP are
 pointed at it directly, so no per-client process runs: Claude Code always (its
-headersHelper starts the gateway), opencode once the gateway starts at login
-(systemd user unit or LaunchAgent, installed here), Cursor and Codex also once
-SONARLESS_MCP_TOKEN holds the gateway token in your shell. The others, and
-every client with --stdio, launch the stdio bridge "sonarless-mcp mcp".
+headersHelper starts the gateway), opencode once the gateway starts at login,
+and Cursor, VS Code and Codex once it starts at login and SONARLESS_MCP_TOKEN
+holds the gateway token in your shell. The login autostart, installed here when
+a chosen client needs it, is a systemd user unit on Linux, a LaunchAgent on
+macOS, and on Windows a per-user Run key (HKCU, no admin) that runs
+gateway-autostart.vbs through wscript, so no console window shows. Where it
+cannot be installed, and for every client with --stdio, setup registers the
+stdio bridge "sonarless-mcp mcp" instead.
 
 Non-interactive: --list shows what was found without changing anything; --yes
 picks every detected client (or every configured one with --remove);

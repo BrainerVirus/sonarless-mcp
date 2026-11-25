@@ -86,6 +86,41 @@ var Keys = []Key{
 	{Name: MetricsFile, Default: "sonar-metrics.json", Project: true, Help: "file written by `sonarless-mcp results`"},
 }
 
+// HomeEnv moves the config and cache dirs under one directory.
+const HomeEnv = "SONARLESS_HOME"
+
+// OtherEnv lists the SONARLESS_* variables sonarless-mcp reads that are not
+// settings: they come from the environment only, never from a config file.
+var OtherEnv = []Key{
+	{Name: HomeEnv, Help: "keep the config in this dir and the cache in its cache/ subdir instead of the OS dirs (tests, a second install)"},
+	{Name: GatewayTokenEnv, Help: "the gateway token, for clients that read it from the environment (Cursor, VS Code, Codex); setup connects them directly once it is set"},
+	{Name: "SONARLESS_REMOTE_TOKEN", Help: "token for `remote add` / `remote update`, instead of the hidden prompt"},
+	{Name: "SONARLESS_GATEWAY_SUPERVISED", Help: "set by the login service: on a self-update the gateway exits and the service restarts it (internal)"},
+}
+
+// EnvHelp describes every SONARLESS_* variable sonarless-mcp reads, for the
+// root command's help.
+func EnvHelp() string {
+	var b strings.Builder
+	b.WriteString("Settings: environment, user config.env, or (marked [project]) a project's\n" +
+		".sonarless.env; `sonarless-mcp config` shows the effective values.\n")
+	for _, k := range Keys {
+		line := "  " + k.Name + "\n      " + k.Help
+		if k.Default != "" {
+			line += " (default: " + k.Default + ")"
+		}
+		if k.Project {
+			line += " [project]"
+		}
+		b.WriteString(line + "\n")
+	}
+	b.WriteString("\nOther environment variables:\n")
+	for _, k := range OtherEnv {
+		b.WriteString("  " + k.Name + "\n      " + k.Help + "\n")
+	}
+	return b.String()
+}
+
 // Config is the resolved configuration.
 type Config struct {
 	values  map[string]string
@@ -97,7 +132,7 @@ type Config struct {
 
 // UserDirs returns the per-OS config and cache dirs.
 func UserDirs() (configDir, cacheDir string, err error) {
-	if d := os.Getenv("SONARLESS_HOME"); d != "" {
+	if d := os.Getenv(HomeEnv); d != "" {
 		return d, filepath.Join(d, "cache"), nil
 	}
 	c, err := os.UserConfigDir()

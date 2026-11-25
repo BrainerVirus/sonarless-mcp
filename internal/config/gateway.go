@@ -12,7 +12,7 @@ import (
 )
 
 // GatewayTokenEnv is the environment variable clients that can only read
-// the gateway token from the environment (Cursor, Codex) take it from.
+// the gateway token from the environment (Cursor, VS Code, Codex) take it from.
 const GatewayTokenEnv = "SONARLESS_MCP_TOKEN"
 
 // GatewayPath is the gateway's MCP endpoint path. It names the tool so a

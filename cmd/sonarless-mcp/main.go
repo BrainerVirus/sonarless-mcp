@@ -97,8 +97,12 @@ func main() {
 // newRootCommand builds the command tree.
 func newRootCommand(ctx context.Context) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "sonarless-mcp",
-		Short:         "Local SonarQube for any project, plus a shared MCP server for AI agents",
+		Use:   "sonarless-mcp",
+		Short: "Local SonarQube for any project, plus a shared MCP server for AI agents",
+		Long: "Local SonarQube for any project, plus a shared MCP server for AI agents.\n\n" +
+			"Exit status: 0 on success, 1 on any error (a usage error names the flag you\n" +
+			"probably meant). A failing quality gate is reported, not an error.\n\n" +
+			config.EnvHelp(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       version,
@@ -206,7 +210,7 @@ func newRootCommand(ctx context.Context) *cobra.Command {
 			return nil
 		},
 	}
-	results.Flags().StringVarP(&resultsOut, "output", "o", "", "JSON output file (default: SONAR_METRICS_PATH in the project)")
+	results.Flags().StringVarP(&resultsOut, "output", "o", "", "JSON output file (default: SONARLESS_METRICS_FILE in the project root)")
 	root.AddCommand(results)
 
 	root.AddCommand(&cobra.Command{
