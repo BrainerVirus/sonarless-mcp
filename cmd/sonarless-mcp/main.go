@@ -77,7 +77,25 @@ func dirArg(args []string) string {
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	clients.Version = version // stamped into the agent skill copies
 
+	root := newRootCommand(ctx)
+	// The update notice: a release check while the command runs, one line on
+	// stderr after it (see notice.go).
+	var notice *updateNotice
+	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) { notice = startNotice(cmd, os.Stderr) }
+
+	ran, err := root.ExecuteContextC(ctx)
+	notice.print()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		printUsageHint(os.Stderr, ran, err, os.Args[1:])
+		os.Exit(1)
+	}
+}
+
+// newRootCommand builds the command tree.
+func newRootCommand(ctx context.Context) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "sonarless-mcp",
 		Short:         "Local SonarQube for any project, plus a shared MCP server for AI agents",
@@ -85,10 +103,6 @@ func main() {
 		SilenceErrors: true,
 		Version:       version,
 	}
-	// The update notice: a release check while the command runs, one line on
-	// stderr after it (see notice.go).
-	var notice *updateNotice
-	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) { notice = startNotice(cmd, os.Stderr) }
 
 	root.AddCommand(&cobra.Command{
 		Use:   "start",
@@ -296,6 +310,7 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 	root.AddCommand(upgradeCommand())
 	root.AddCommand(versionCommand())
 	root.AddCommand(remoteCommand())
+	root.AddCommand(skillCommand())
 
 	root.AddCommand(&cobra.Command{
 		Use:    "daemon",
@@ -314,12 +329,7 @@ picks per client. See "sonarless-mcp mcp-config <client>" for both snippets.`,
 		},
 	})
 
-	err := root.ExecuteContext(ctx)
-	notice.print()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
+	return root
 }
 
 func printMeasures(m map[string]any) {

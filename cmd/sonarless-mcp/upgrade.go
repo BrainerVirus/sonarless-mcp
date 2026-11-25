@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/sigstore/sigstore-go/pkg/root"
@@ -30,6 +31,11 @@ var (
 	// refreshSkills rewrites the installed agent skill copies; it returns
 	// how many it changed.
 	refreshSkills = func() int { return clients.RefreshSkills(clients.DefaultEnv()) }
+	// newSkillSync runs `skill sync` with the binary an upgrade just
+	// installed, so the skill copies take its version now.
+	newSkillSync = func(ctx context.Context, exe string) ([]byte, error) {
+		return update.RunBinary(ctx, exe, "skill", "sync")
+	}
 	// refreshImage pulls the configured MCP image.
 	refreshImage = pullMCPImage
 	// spawnBackground starts the detached background run.
@@ -118,10 +124,8 @@ SONARLESS_UPDATE_NOTICE=false turns it off.`,
 			case check:
 				return runCheck(ctx, newUpgrader(e.cfg, errOut), out, tag)
 			}
-			err = runUpgrade(ctx, newUpgrader(e.cfg, errOut), out, errOut, tag, allowUnsigned)
-			if n := refreshSkills(); n > 0 {
-				fmt.Fprintf(out, "refreshed the sonarless-mcp skill in %d client(s)\n", n)
-			}
+			res, err := runUpgrade(ctx, newUpgrader(e.cfg, errOut), out, errOut, tag, allowUnsigned)
+			refreshSkillsAfter(ctx, res, out, "")
 			refreshImage(ctx, e.cfg, out, errOut, "")
 			return err
 		},
@@ -157,14 +161,14 @@ func runCheck(ctx context.Context, u *update.Upgrader, out io.Writer, tag string
 	return nil
 }
 
-func runUpgrade(ctx context.Context, u *update.Upgrader, out, errOut io.Writer, tag string, allowUnsigned bool) error {
+func runUpgrade(ctx context.Context, u *update.Upgrader, out, errOut io.Writer, tag string, allowUnsigned bool) (*update.Result, error) {
 	if !update.IsRelease(u.Current) && tag == "" {
 		fmt.Fprintln(out, "development build; not self-updating (install a release, or name one with --version)")
-		return nil
+		return nil, nil
 	}
 	res, err := u.Upgrade(ctx, tag, allowUnsigned)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	switch {
 	case res.Updated:
@@ -181,7 +185,39 @@ func runUpgrade(ctx context.Context, u *update.Upgrader, out, errOut io.Writer, 
 	default:
 		fmt.Fprintf(out, "sonarless-mcp %s is up to date\n", res.Current)
 	}
-	return nil
+	return res, nil
+}
+
+// refreshSkillsAfter brings the agent skill copies in line after an upgrade
+// run. When a newer binary was installed, the running (old) one would stamp
+// its own version, so the new binary's `skill sync` rewrites them instead;
+// a release without that command (0.9.0 and older) refreshes them when it
+// next runs. A downgrade leaves the copies alone (they are newer; the older
+// binary keeps them). Without an install, this binary's own refresh runs.
+func refreshSkillsAfter(ctx context.Context, res *update.Result, out io.Writer, stamp string) {
+	switch {
+	case res == nil || !res.Updated:
+		if n := refreshSkills(); n > 0 {
+			fmt.Fprintf(out, "%srefreshed the sonarless-mcp skill in %d client(s)\n", stamp, n)
+		}
+	case !res.Newer:
+		// A downgrade: never rewrite copies with an older skill.
+	default:
+		b, err := newSkillSync(ctx, res.Path)
+		if err != nil {
+			fmt.Fprintf(out, "%sthe agent skill copies take sonarless-mcp %s the next time it runs\n", stamp, res.Latest)
+			return
+		}
+		n := 0
+		for _, l := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(l, clients.SyncUpdated+"\t") {
+				n++
+			}
+		}
+		if n > 0 {
+			fmt.Fprintf(out, "%srefreshed the sonarless-mcp skill in %d copies to %s\n", stamp, n, res.Latest)
+		}
+	}
 }
 
 // runBackground is `upgrade --background`, which autoUpdate starts: its
@@ -189,8 +225,10 @@ func runUpgrade(ctx context.Context, u *update.Upgrader, out, errOut io.Writer, 
 func runBackground(ctx context.Context, cfg *config.Config, out, errOut io.Writer) {
 	stamp := time.Now().Format(time.RFC3339) + " "
 	_ = os.Remove(filepath.Join(cfg.CacheDir, "last-update-check")) // the state file replaced it
+	var res *update.Result
 	if update.IsRelease(version) {
-		res, err := newUpgrader(cfg, errOut).Background(ctx)
+		var err error
+		res, err = newUpgrader(cfg, errOut).Background(ctx)
 		switch {
 		case err != nil:
 			fmt.Fprintf(errOut, "%supgrade failed: %v\n", stamp, err)
@@ -203,7 +241,7 @@ func runBackground(ctx context.Context, cfg *config.Config, out, errOut io.Write
 			fmt.Fprintf(out, "%sthe last background upgrade failed; next attempt after %s\n", stamp, res.RetryAt.Format(time.RFC3339))
 		}
 	}
-	refreshSkills()
+	refreshSkillsAfter(ctx, res, out, stamp)
 	refreshImage(ctx, cfg, out, errOut, stamp)
 }
 

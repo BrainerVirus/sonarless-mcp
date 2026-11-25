@@ -140,7 +140,7 @@ picks every detected client (or every configured one with --remove);
 					EnvToken:   os.Getenv(config.GatewayTokenEnv) == token,
 					GatewayEnv: gatewayEnv(), LogFile: gatewayLog(cfg),
 				})
-				envMissing := false
+				envMissing, skills := false, false
 				for _, r := range results {
 					c := r.Client
 					if r.Err != nil {
@@ -165,7 +165,11 @@ picks every detected client (or every configured one with --remove);
 						fmt.Printf("    (skill not installed: %v)\n", err)
 					} else if f != "" {
 						fmt.Printf("    + skill %s\n", f)
+						skills = true
 					}
+				}
+				if skills {
+					fmt.Println("\nThe agent skill copies update with sonarless-mcp; `sonarless-mcp skill list` shows them.")
 				}
 				if autostart != "" {
 					fmt.Printf("\nThe gateway (%s) starts at login: %s\n", cfg.GatewayURL(), autostart)

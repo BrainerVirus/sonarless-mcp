@@ -40,4 +40,5 @@ After adding/changing a remote, the AI client must be restarted to see it.
 - What is running and how much memory it takes: `sonarless-mcp status` (`--json` for details: containers with memory, gateway sessions, stdio bridges, running scans). To free it all, the user runs `sonarless-mcp stop --all` (plain `stop` keeps the gateway).
 - Project not found on a server: scan it locally, or it isn't analyzed on that remote.
 - `sonarless-mcp upgrade` refused a release (signature or checksum check failed): the installed binary is unchanged; tell the user, don't work around it. `--allow-unsigned` is only for deliberately going back to a release from before signing (v0.8.1 or older).
+- This skill looks outdated, or a command says a flag is unknown: `sonarless-mcp skill list` shows each installed copy's version and state, `sonarless-mcp skill sync` updates them; a usage error names the flag you probably meant (`did you mean --tests?`), and `sonarless-mcp <command> --help` lists the rest.
 - Terminal says `sonarless-mcp` not found right after install: `rehash` (zsh), `hash -r` (bash), or a new tab (Warp).
