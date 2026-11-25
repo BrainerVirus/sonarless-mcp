@@ -33,6 +33,14 @@ jobs:
           else
             npx commitlint --from "$from" --to HEAD
           fi
+      # A squash merge commits the PR title plus " (#N)", and that commit is
+      # linted again on main before a release: check the title as it will land.
+      - name: commitlint the squash-merge subject
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: printf '%s (#%s)\n' "$PR_TITLE" "$PR_NUMBER" | npx commitlint
 
   test:
     strategy:
