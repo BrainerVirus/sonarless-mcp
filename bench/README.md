@@ -43,6 +43,26 @@ Run it from the repository root.
 Scrubbed transcripts of each run land in `bench/.transcripts/<model>/`
 (ignored by git) for debugging a failure.
 
+## Results so far (claude-haiku-4-5)
+
+| Skill | Runs | Runs passed | Skill loaded | Mean input tokens/run | Cost |
+| --- | --- | --- | --- | --- | --- |
+| before the bench (5200 bytes) | 1 per case | 6/10 | 5/10 | 98,673 | $0.37 |
+| MCP-tools rule in the body (5501 bytes) | 1 per case | 9/10 | 7/10 | 118,957 | $0.38 |
+| the same rule also in the description (5453 bytes) | 3 per case | 15/30 | 3/30 | 105,013 | $1.06 |
+| no skill (`--no-skill` control) | 1 per case | 4/10 | n/a | 110,566 | $0.35 |
+
+What the skill adds is what it teaches once loaded: 9 of the 10 runs that
+loaded it passed, and the CLI-only cases (`upgrade-check`, `skill-list`) fail
+without it.
+Loading is the weak spot: a description that says results come from the MCP
+tools reads as enough on its own, and Haiku then skips the skill (3 loads in
+30 runs, close to the control). The description went back to the 9/10 one;
+the current skill (5340 bytes, the body rule kept at the top) still needs its
+own `--repeat 3` run. Results: `bench/results/baseline/`, `bench/results/`
+and `bench/results/no-skill/`; the committed `claude-haiku-4-5/` runs are the
+description variant's.
+
 ## What a run does
 
 Each run gets a temp dir with two parts:
