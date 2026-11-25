@@ -241,3 +241,18 @@ func TestUninstallRefusesForeignSkill(t *testing.T) {
 		t.Error("touched the user's skill")
 	}
 }
+
+// Windows CI checks SKILL.md out with CRLF line endings, and the embedded
+// text keeps them: the copy must still carry its version stamp.
+func TestRenderSkillStampsACRLFCheckout(t *testing.T) {
+	orig := skillMD
+	t.Cleanup(func() { skillMD = orig })
+	skillMD = strings.ReplaceAll(strings.ReplaceAll(orig, "\r\n", "\n"), "\n", "\r\n")
+	out := RenderSkill("1.2.3")
+	if got := SkillVersionOf(out); got != "1.2.3" {
+		t.Fatalf("version %q in a CRLF checkout's copy", got)
+	}
+	if strings.Contains(string(out), "\r") {
+		t.Error("the copy keeps CR characters")
+	}
+}

@@ -62,11 +62,13 @@ func ownSkill(file string) (exists, ours bool) {
 // front matter.
 func RenderSkill(version string) []byte {
 	stamp := "metadata:\n  version: " + strconv.Quote(version) + "\n"
-	if i := strings.Index(skillMD[3:], "\n---\n"); strings.HasPrefix(skillMD, "---\n") && i >= 0 {
+	// A Windows checkout embeds SKILL.md with CRLF: write LF everywhere.
+	md := strings.ReplaceAll(skillMD, "\r\n", "\n")
+	if i := strings.Index(md[3:], "\n---\n"); strings.HasPrefix(md, "---\n") && i >= 0 {
 		end := 3 + i + 1 // start of the closing ---
-		return []byte(skillMD[:end] + stamp + skillMD[end:])
+		return []byte(md[:end] + stamp + md[end:])
 	}
-	return []byte(skillMD)
+	return []byte(md)
 }
 
 // SkillVersionOf returns metadata.version from a SKILL.md's front matter,
