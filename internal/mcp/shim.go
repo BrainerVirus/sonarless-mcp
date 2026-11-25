@@ -156,6 +156,9 @@ type Shim struct {
 	backendsMu sync.RWMutex // guards Backends once the shim runs
 	remotesMu  sync.Mutex   // serializes reloads
 	remotesSig string       // remotes.json as last seen (size and mtime)
+	// remotesRetry, after a failed reload, is when the same files are tried
+	// again; zero once a reload succeeded.
+	remotesRetry time.Time
 
 	http         *http.Client
 	out          io.Writer
@@ -619,6 +622,10 @@ func (s *Shim) remotesStamp() string {
 	return b.String()
 }
 
+// reloadRetryAfter is how long a failed reload waits before the unchanged
+// files are tried again.
+var reloadRetryAfter = 10 * time.Second
+
 // reloadRemotes picks up remotes.json and token changes (remote add,
 // update, remove) without a client restart: the remote backends are rebuilt,
 // the booted local one is kept, and clients are told the tool list (its
@@ -630,17 +637,20 @@ func (s *Shim) reloadRemotes() {
 	stamp := s.remotesStamp()
 	s.remotesMu.Lock()
 	defer s.remotesMu.Unlock()
-	if stamp == s.remotesSig {
+	if stamp == s.remotesSig && (s.remotesRetry.IsZero() || time.Now().Before(s.remotesRetry)) {
 		return
 	}
 	s.remotesSig = stamp
 	fresh, err := s.Reload()
 	if err != nil || len(fresh) == 0 {
+		// Try the same files again after a pause rather than on every request.
+		s.remotesRetry = time.Now().Add(reloadRetryAfter)
 		if s.Log != nil {
-			fmt.Fprintf(s.Log, "sonarless-mcp: remotes changed but could not be reloaded: %v\n", err)
+			fmt.Fprintf(s.Log, "sonarless-mcp: remotes changed but could not be reloaded (retrying in %s): %v\n", reloadRetryAfter, err)
 		}
 		return
 	}
+	s.remotesRetry = time.Time{}
 	next := append([]*Backend{s.local()}, fresh[1:]...)
 	s.backendsMu.Lock()
 	s.Backends = next
