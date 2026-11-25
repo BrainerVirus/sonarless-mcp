@@ -52,6 +52,7 @@ Per project (also in `.sonarless.env`):
 | `SONARLESS_PROJECT_KEY` / `SONARLESS_PROJECT_NAME` | detected | override the [detected](scanning.md#project-key-detection) key and name |
 | `SONARLESS_SCANNER` | auto | `cli`, `maven`, `gradle` or `dotnet` |
 | `SONARLESS_SCAN_TESTS` | `false` | run tests in build-based scans (needed for coverage) |
+| `SONARLESS_FAIL_ON_GATE` | `false` | `sonarless-mcp scan` exits 2 when the quality gate fails, like `--fail-on-gate` ([exit status](scanning.md#exit-status)) |
 | `SONARLESS_SOURCES` | `.` | `sonar.sources` for CLI scans without `sonar-project.properties` |
 | `SONARLESS_SCANNER_IMAGE` | `sonarsource/sonar-scanner-cli:12.4` | sonar-scanner CLI image |
 | `SONARLESS_METRICS_FILE` | `sonar-metrics.json` | file `sonarless-mcp results` writes |
