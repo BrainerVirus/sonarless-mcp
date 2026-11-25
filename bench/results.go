@@ -225,8 +225,10 @@ func readSummary(dir string) (Summary, error) {
 	return s, json.Unmarshal(b, &s)
 }
 
-// compare prints before and after per case and reports whether any case's
-// pass rate dropped.
+// compare prints before and after per case and reports whether a case
+// regressed: it passed before and fails now, by the grader's rule (casePasses:
+// the run passes for a single run, two thirds of the runs for repeats). A lower
+// pass rate on a case that still passes is a note, not a regression.
 func compare(w io.Writer, before, after Summary) bool {
 	rows := map[string]CaseRow{}
 	for _, r := range before.Cases {
@@ -245,8 +247,11 @@ func compare(w io.Writer, before, after Summary) bool {
 		if a.Stale {
 			mark = "  (earlier skill)"
 		}
-		if rate(a.Passes, a.Graded) < rate(b.Passes, b.Graded) {
-			mark, dropped = "  DROP", true
+		switch {
+		case b.Pass && !a.Pass:
+			mark, dropped = "  REGRESSED", true
+		case rate(a.Passes, a.Graded) < rate(b.Passes, b.Graded):
+			mark += "  (lower rate, still passes)"
 		}
 		fmt.Fprintf(w, "%-22s %4d/%-4d %4d/%-4d %12.0f %12.0f %+7.1f%%%s\n", a.Case, b.Passes, b.Graded, a.Passes, a.Graded,
 			b.MeanTotalInput, a.MeanTotalInput, pct(b.MeanTotalInput, a.MeanTotalInput), mark)

@@ -36,7 +36,10 @@ Run it from the repository root.
 - `regrade <dir>` grades the stored runs of a results dir again with the
   current cases, without a model (after fixing a rule).
 - `compare <before> <after>` prints each case's passes and mean input tokens
-  per run side by side, and exits 1 when a case's pass rate dropped. Keep the
+  per run side by side, and exits 1 when a case regressed: it passed before
+  and fails now, by the grader's rule (the run for a single run, two thirds of
+  the runs for repeats). A lower pass rate on a case that still passes is
+  marked "lower rate, still passes" and does not fail. Keep the
   results of the skill before a change in `bench/results/baseline/<model>/`
   to compare against.
 
@@ -69,8 +72,9 @@ description a plain list of what the skill covers and measure any change to
 it. `remote-offline` (1/3) still fails: Haiku answers from the MCP server
 instructions without loading the skill, and asks instead of falling back.
 
-`compare` against the baseline exits 1 for `file-issues` (1/1 before, 2/3
-now: a case still passes at two thirds); the baseline was a single run.
+`compare` against the baseline exits 0: `file-issues` (1/1 before, 2/3 now)
+still passes at two thirds and is only marked "lower rate, still passes"; the
+baseline was a single run.
 
 ## What a run does
 

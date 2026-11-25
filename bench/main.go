@@ -47,7 +47,7 @@ func compareMain(args []string) int {
 		var after Summary
 		if after, err = readSummary(args[1]); err == nil {
 			if compare(os.Stdout, before, after) {
-				fmt.Println("a case's pass rate dropped")
+				fmt.Println("a case that passed before fails now")
 				return 1
 			}
 			return 0

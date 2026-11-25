@@ -317,3 +317,36 @@ func TestGivenPassesWhenCountedThenTwoThirdsPassACase(t *testing.T) {
 		}
 	}
 }
+
+func row(name string, passes, graded int) CaseRow {
+	return CaseRow{Case: name, Passes: passes, Graded: graded, Pass: casePasses(passes, graded)}
+}
+
+func TestGivenTwoSummariesWhenComparedThenOnlyAPassingCaseThatFailsNowRegresses(t *testing.T) {
+	before := Summary{Cases: []CaseRow{row("single", 1, 1), row("repeat", 3, 3), row("fixed", 0, 1)}}
+	for _, tt := range []struct {
+		name    string
+		after   []CaseRow
+		regress bool
+		mark    string
+	}{
+		{"a lower rate that still passes is a note", []CaseRow{row("single", 2, 3), row("repeat", 2, 3), row("fixed", 3, 3)}, false, "lower rate, still passes"},
+		{"a single-run pass that fails now regresses", []CaseRow{row("single", 0, 1), row("repeat", 3, 3), row("fixed", 0, 1)}, true, "REGRESSED"},
+		{"a repeat pass below two thirds regresses", []CaseRow{row("single", 1, 1), row("repeat", 1, 3), row("fixed", 0, 1)}, true, "REGRESSED"},
+		{"a case failing before and after is no regression", []CaseRow{row("single", 1, 1), row("repeat", 3, 3), row("fixed", 0, 3)}, false, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			got := compare(&out, before, Summary{Cases: tt.after})
+			if got != tt.regress {
+				t.Errorf("regressed = %v, want %v\n%s", got, tt.regress, out.String())
+			}
+			if tt.mark != "" && !strings.Contains(out.String(), tt.mark) {
+				t.Errorf("output lacks %q:\n%s", tt.mark, out.String())
+			}
+			if !tt.regress && strings.Contains(out.String(), "REGRESSED") {
+				t.Errorf("unexpected REGRESSED:\n%s", out.String())
+			}
+		})
+	}
+}
