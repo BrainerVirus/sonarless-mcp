@@ -85,16 +85,14 @@ by mistake could not touch your containers. A run where the model ran
 ### The fake sonarless-mcp
 
 `harness/bin/sonarless-mcp` is the bench binary itself (it acts as
-sonarless-mcp when run under that name). It knows the real command tree:
+sonarless-mcp when run under that name). It parses each command line with the
+real command tree (`internal/cli.NewRootCommand`, built but never executed):
 an unknown command or flag fails with the real message, exit 1 and the same
-flag hint (`did you mean --fail-on-gate?`), and `--help` prints each
-command's flags. A unit test checks every command and flag against
-`cmd/sonarless-mcp`, and that every command line in `SKILL.md` parses. It
-never runs a command: a call is answered from the case's `fixtures.rules`
+flag hint (`did you mean --fail-on-gate?`), and `--help` prints the real help.
+It never runs a command: a call is answered from the case's `fixtures.rules`
 (regex on the call line, first match wins), then from built-in replies (scan
-passes the gate, `upgrade --check` finds v0.15.0, `skill list` shows one
-outdated copy, `remote add` refuses to prompt for a token without a
-terminal).
+passes the gate, `upgrade --check` finds v0.15.0, `skill list` shows one stale
+copy, `remote add` refuses to prompt for a token without a terminal).
 
 `sonarless-mcp mcp` is a fake SonarQube MCP server on stdio. It lists the
 `sonarless_*` tools and the SonarQube tools agents use most, with the real

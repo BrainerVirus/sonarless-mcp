@@ -12,8 +12,8 @@ import (
 	"testing"
 )
 
-// cli is a CLI call that exited 0; tc a tool call.
-func cli(words ...string) Call { return Call{Argv: words} }
+// cliCall is a CLI call that exited 0; tc a tool call.
+func cliCall(words ...string) Call { return Call{Argv: words} }
 
 func tc(name string, args map[string]any) Call { return Call{Tool: name, Args: args} }
 
@@ -65,17 +65,17 @@ func TestGivenEachCaseWhenGradedItPassesTheTaughtRunAndFailsTheTrap(t *testing.T
 			trap:   run{calls: []Call{scanTool, tc("sonarless_remote_sync", map[string]any{"remote": "work"})}, answer: "It passes."},
 		},
 		"upgrade-check": {
-			taught: run{calls: []Call{cli("upgrade", "--check")}, answer: "v0.15.0 is available."},
-			trap:   run{calls: []Call{cli("upgrade")}, answer: "Upgraded to v0.15.0."},
+			taught: run{calls: []Call{cliCall("upgrade", "--check")}, answer: "v0.15.0 is available."},
+			trap:   run{calls: []Call{cliCall("upgrade")}, answer: "Upgraded to v0.15.0."},
 		},
 		"skill-list": {
-			taught: run{calls: []Call{cli("skill", "list")}, answer: "The OpenCode copy is outdated (v0.12.0)."},
-			trap:   run{calls: []Call{cli("skill", "list"), cli("skill", "sync")}, answer: "I updated the outdated copy."},
+			taught: run{calls: []Call{cliCall("skill", "list")}, answer: "The OpenCode copy is outdated (v0.12.0)."},
+			trap:   run{calls: []Call{cliCall("skill", "list"), cliCall("skill", "sync")}, answer: "I updated the outdated copy."},
 		},
 		"flag-typo": {
-			taught: run{calls: []Call{{Argv: []string{"scan", "--fail-on-gates"}, Exit: 1}, cli("scan", "--fail-on-gate")},
+			taught: run{calls: []Call{{Argv: []string{"scan", "--fail-on-gates"}, Exit: 1}, cliCall("scan", "--fail-on-gate")},
 				answer: "Exit 0: the quality gate passed."},
-			trap: run{calls: []Call{{Argv: []string{"scan", "--fail-on-gates"}, Exit: 1}, cli("scan")}, answer: "The gate passed."},
+			trap: run{calls: []Call{{Argv: []string{"scan", "--fail-on-gates"}, Exit: 1}, cliCall("scan")}, answer: "The gate passed."},
 		},
 		"add-remote": {
 			taught: run{answer: "Run this in your terminal: `sonarless-mcp remote add ci --url https://sonar.acme.example` and paste the token at the prompt."},
@@ -113,7 +113,7 @@ func TestGivenEachCaseWhenGradedItPassesTheTaughtRunAndFailsTheTrap(t *testing.T
 }
 
 func TestGivenACallWhenLinedThenCLIAndToolCallsReadAsTheRulesExpect(t *testing.T) {
-	if got := cli("scan", "--scanner=maven").Line(); got != "sonarless-mcp scan --scanner maven" {
+	if got := cliCall("scan", "--scanner=maven").Line(); got != "sonarless-mcp scan --scanner maven" {
 		t.Errorf("cli line = %q", got)
 	}
 	got := tc("get_component_measures", map[string]any{"server": "work", "metricKeys": []any{"coverage"}}).Line()
@@ -175,49 +175,6 @@ func TestGivenTheSkillWhenItsCommandsRunInTheFakeThenNoneIsAUsageError(t *testin
 			if _, err := parseArgv(words[1:]); err != nil {
 				t.Errorf("%q: %v", s[1], err)
 			}
-		}
-	}
-}
-
-// The fake's command tree is the real one: every command and flag it knows is
-// in cmd/sonarless-mcp, and every flag declared there is in the fake.
-func TestGivenTheFakeCommandTreeThenEachCommandAndFlagIsInTheRealSource(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "cmd", "sonarless-mcp", "*.go"))
-	if err != nil || len(paths) == 0 {
-		t.Fatalf("no sources: %v", err)
-	}
-	var src strings.Builder
-	for _, p := range paths {
-		if strings.HasSuffix(p, "_test.go") {
-			continue
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		src.Write(b)
-	}
-	code := src.String()
-	fakeFlags := map[string]bool{"version": true}
-	for _, c := range commands {
-		if c.path != "" {
-			word := lastWord(c.path)
-			if !regexp.MustCompile(`Use:\s+"` + regexp.QuoteMeta(word) + `[ "]`).MatchString(code) {
-				t.Errorf("command %q is not in cmd/sonarless-mcp", c.path)
-			}
-		}
-		for _, f := range c.flags {
-			fakeFlags[f.name] = true
-			if !strings.Contains(code, `"`+f.name+`"`) {
-				t.Errorf("flag --%s of %q is not in cmd/sonarless-mcp", f.name, c.path)
-			}
-		}
-	}
-	decl := regexp.MustCompile(`Flags\(\)\.\w+\(&?[\w.]+,\s*"([a-z-]+)"`)
-	hidden := map[string]bool{"background": true}
-	for _, m := range decl.FindAllStringSubmatch(code, -1) {
-		if !fakeFlags[m[1]] && !hidden[m[1]] {
-			t.Errorf("cmd/sonarless-mcp declares --%s; the fake does not know it", m[1])
 		}
 	}
 }
