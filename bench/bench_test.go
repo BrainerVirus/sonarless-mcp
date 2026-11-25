@@ -291,6 +291,9 @@ func TestGivenAStreamJSONTranscriptWhenParsedThenItReadsSkillToolsAndUsage(t *te
 	if !ranSonarless(tr.commands, tr.denials) || hostBlocked(tr.denials) {
 		t.Errorf("commands %v denials %v", tr.commands, tr.denials)
 	}
+	if ranSonarless([]string{"which sonarless-mcp"}, nil) || !ranSonarless([]string{"cd x && sonarless-mcp status"}, nil) {
+		t.Error("ranSonarless: only sonarless-mcp in command position runs it")
+	}
 	if !hostBlocked([]string{"sonarless-mcp skill list"}) || hostBlocked([]string{"sonarless-mcp status | head"}) {
 		t.Error("hostBlocked: a plain command is a host denial, a pipe is not")
 	}

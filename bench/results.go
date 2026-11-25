@@ -333,9 +333,13 @@ func regrade(casesDir, dir string) error {
 			return err
 		}
 		for i, r := range cr.Runs {
-			if !graded(r) {
+			// A fakeSilent error is graded when the current check no longer
+			// sees a sonarless-mcp run the fake missed.
+			silent := r.Status == "error" && r.Reason == fakeSilent && !(ranSonarless(r.Commands, r.Denials) && cliCalls(r.Calls) == 0)
+			if !graded(r) && !silent {
 				continue
 			}
+			r.Reason = ""
 			failures := Grade(c, r.Calls, r.Commands, r.Answer)
 			if slices.Contains(r.Failures, "max turns") {
 				failures = append(failures, "max turns")

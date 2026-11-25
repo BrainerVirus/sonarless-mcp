@@ -158,7 +158,7 @@ func (r *runner) runCase(ctx context.Context, c *Case, n int) (res RunResult) {
 	case hostBlocked(t.denials):
 		res.Status, res.Reason = "blocked", "a host policy denied a plain sonarless-mcp command"
 	case ranSonarless(t.commands, t.denials) && cliCalls(calls) == 0:
-		res.Status, res.Reason = "error", "sonarless-mcp ran but the fake logged nothing: a real sonarless-mcp may be first on PATH"
+		res.Status, res.Reason = "error", fakeSilent
 	default:
 		res.Failures = Grade(c, calls, t.commands, t.answer)
 		if t.subtype == "error_max_turns" {
@@ -192,6 +192,10 @@ func scrubRun(sc *scrubber, res *RunResult) {
 	}
 	res.Answer, res.Reason = sc.scrub(res.Answer), sc.scrub(res.Reason)
 }
+
+// fakeSilent is the reason of a run whose model ran sonarless-mcp while the
+// fake logged no CLI call.
+const fakeSilent = "sonarless-mcp ran but the fake logged nothing: a real sonarless-mcp may be first on PATH"
 
 func errResult(res RunResult, err error) RunResult {
 	res.Status, res.Reason = "error", err.Error()
@@ -407,7 +411,9 @@ func hostBlocked(denials []string) bool {
 	return false
 }
 
-var sonarlessWord = regexp.MustCompile(`(^|[\s;&|(])sonarless-mcp(\s|$)`)
+// sonarlessWord is sonarless-mcp in command position (not an argument, as in
+// `which sonarless-mcp`).
+var sonarlessWord = regexp.MustCompile(`(^|[;&|(]|\$\()\s*sonarless-mcp(\s|$)`)
 
 func ranSonarless(commands, denials []string) bool {
 	denied := map[string]bool{}
