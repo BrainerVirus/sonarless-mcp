@@ -1,0 +1,41 @@
+{
+  "case": "upgrade-check",
+  "model": "claude-haiku-4-5",
+  "key": "1-bd05bb69d40ee6b4-562c45df68291c94-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 1,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: checks for a release",
+      "failures": [
+        "require: checks for a release",
+        "answer"
+      ],
+      "turns": 3,
+      "tokens": {
+        "input": 18,
+        "output": 666,
+        "cacheCreation": 8586,
+        "cacheRead": 33036
+      },
+      "costUSD": 0.0238236,
+      "durationMs": 8440,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": [
+        "sonarless-mcp --version 2\u003e\u00261 || npm list -g sonarless-mcp 2\u003e\u00261 | head -20",
+        "npm view sonarless-mcp version 2\u003e\u00261"
+      ],
+      "calls": null,
+      "denials": [
+        "sonarless-mcp --version 2\u003e\u00261 || npm list -g sonarless-mcp 2\u003e\u00261 | head -20",
+        "npm view sonarless-mcp version 2\u003e\u00261"
+      ],
+      "answer": "I need permission to run bash commands to check your currently installed version and the latest available version. These are read-only checks:\n\n- `sonarless-mcp --version` or `npm list -g sonarless-mcp` (to find your current version)\n- `npm view sonarless-mcp version` (to check the latest released version)\n\nWould you like me to run these commands?"
+    }
+  ]
+}

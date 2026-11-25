@@ -1,0 +1,41 @@
+{
+  "case": "remote-offline",
+  "model": "claude-haiku-4-5",
+  "key": "1-9d0d1bc9cd991377-562c45df68291c94-claude-haiku-4-5",
+  "passes": 0,
+  "graded": 1,
+  "pass": false,
+  "runs": [
+    {
+      "run": 1,
+      "status": "fail",
+      "failed": "require: falls back to local",
+      "failures": [
+        "require: falls back to local"
+      ],
+      "turns": 3,
+      "tokens": {
+        "input": 28,
+        "output": 652,
+        "cacheCreation": 8555,
+        "cacheRead": 54015
+      },
+      "costUSD": 0.025799500000000003,
+      "durationMs": 9994,
+      "skillLoaded": false,
+      "skillListed": true,
+      "mcpConnected": true,
+      "commands": null,
+      "calls": [
+        {
+          "tool": "search_security_hotspots",
+          "args": {
+            "server": "work"
+          },
+          "exit": 1
+        }
+      ],
+      "answer": "The CI SonarQube server at http://sonar.example.com is currently unreachable (connection timeout). This could be due to network/VPN connectivity or the server being offline.\n\nWould you like me to:\n1. Check the **local** SonarQube server (scanned from your working copy) instead, or\n2. Wait and try again later when the remote server might be available?"
+    }
+  ]
+}
